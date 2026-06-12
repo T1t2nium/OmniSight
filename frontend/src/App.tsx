@@ -56,145 +56,156 @@ function App() {
   });
 
   // PR 4: Immediately stop AI audio when user starts speaking (local barge-in).
-  // The backend interrupt message provides belt-and-suspenders confirmation.
   useEffect(() => {
     if (vad.isSpeaking) {
       stopPlayback();
     }
   }, [vad.isSpeaking, stopPlayback]);
 
-  // Process incoming messages: update stats, handle AI pipeline messages
+  // ---- Stable refs for audio callbacks (avoids stale closures) ----
+  const playPCM16Ref = useRef(playPCM16);
+  playPCM16Ref.current = playPCM16;
+  const playSpeechSynthesisRef = useRef(playSpeechSynthesis);
+  playSpeechSynthesisRef.current = playSpeechSynthesis;
+  const stopPlaybackRef = useRef(stopPlayback);
+  stopPlaybackRef.current = stopPlayback;
+
+  // ---- Process messages directly via onMessage (avoids React 18 batching issues) ----
   useEffect(() => {
-    const msg = ws.lastMessage;
-    if (!msg) return;
-
-    // Extract stats from echo payloads
-    if (msg.type === 'echo') {
-      const p = msg.payload as Record<string, unknown>;
-      if (typeof p.total_frames === 'number') setTotalFrames(p.total_frames);
-      if (typeof p.total_audio_ms === 'number') setTotalAudioMs(p.total_audio_ms);
-      if (
-        typeof p.received_type === 'string' &&
-        MUTED_ECHO_TYPES.has(p.received_type)
-      ) {
-        return; // Skip high-frequency echoes
+    return ws.onMessage((msg: WSMessage) => {
+      // Extract stats from echo payloads
+      if (msg.type === 'echo') {
+        const p = msg.payload as Record<string, unknown>;
+        if (typeof p.total_frames === 'number') setTotalFrames(p.total_frames);
+        if (typeof p.total_audio_ms === 'number') setTotalAudioMs(p.total_audio_ms);
+        if (
+          typeof p.received_type === 'string' &&
+          MUTED_ECHO_TYPES.has(p.received_type)
+        ) {
+          return; // Skip high-frequency echoes
+        }
       }
-    }
 
-    // ---- PR 4: TTS Audio playback ----
-    if (msg.type === 'tts_audio') {
-      const p = msg.payload as unknown as TTSAudioPayload;
-      ttsActiveRef.current = true;
-      playPCM16(p.data, p.sample_rate, p.text);
-      return;
-    }
-
-    // ---- PR 4: Interrupt (server confirmed barge-in) ----
-    if (msg.type === 'interrupt') {
-      const p = msg.payload as unknown as InterruptPayload;
-      console.log('[App] Interrupt received:', p.reason);
-      stopPlayback();
-      // Clean up any partial LLM streaming text
-      llmBufferRef.current = '';
-      setChatMessages((prev) => {
-        const filtered = prev.filter(
-          (m) => m.type !== 'llm_response' || (m.payload as unknown as LLMResponsePayload).done === true
-        );
-        return filtered;
-      });
-      return;
-    }
-
-    // ---- New transcript: user spoke → reset TTS state ----
-    if (msg.type === 'transcript') {
-      ttsActiveRef.current = false;
-    }
-
-    // Handle streaming LLM response
-    if (msg.type === 'llm_response') {
-      const p = msg.payload as unknown as LLMResponsePayload;
-      if (!p.done) {
-        // Accumulate deltas
-        llmBufferRef.current += p.delta;
-        // Replace or append streaming message in chat
-        setChatMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (
-            last &&
-            last.type === 'llm_response' &&
-            (last.payload as unknown as LLMResponsePayload).done === false
-          ) {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                payload: {
-                  delta: llmBufferRef.current,
-                  done: false,
-                  total_duration: 0,
-                },
-              },
-            ];
-          }
-          return [...prev, msg];
-        });
+      // ---- PR 4: TTS Audio playback ----
+      if (msg.type === 'tts_audio') {
+        const p = msg.payload as unknown as TTSAudioPayload;
+        ttsActiveRef.current = true;
+        playPCM16Ref.current(p.data, p.sample_rate, p.text);
         return;
       }
-      // Final chunk — update the existing streaming message in-place
-      if (!llmBufferRef.current) return;
-      const finalText = llmBufferRef.current;
-      const finalDuration = p.total_duration;
-      llmBufferRef.current = '';
 
-      // PR 4: Only use SpeechSynthesis as fallback when Piper TTS is inactive
-      if (!ttsActiveRef.current) {
-        playSpeechSynthesis(finalText);
+      // ---- PR 4: Interrupt (server confirmed barge-in) ----
+      if (msg.type === 'interrupt') {
+        console.log('[App] Interrupt received:', (msg.payload as unknown as InterruptPayload).reason);
+        stopPlaybackRef.current();
+        llmBufferRef.current = '';
+        setChatMessages((prev) =>
+          prev.filter(
+            (m) =>
+              m.type !== 'llm_response' ||
+              (m.payload as unknown as LLMResponsePayload).done === true,
+          ),
+        );
+        return;
       }
-      ttsActiveRef.current = false;
 
-      setChatMessages((prev) => {
-        for (let i = prev.length - 1; i >= 0; i--) {
-          if (
-            prev[i].type === 'llm_response' &&
-            (prev[i].payload as unknown as LLMResponsePayload).done === false
-          ) {
-            const updated = [...prev];
-            updated[i] = {
-              ...updated[i],
+      // ---- New transcript: user spoke → reset TTS state ----
+      if (msg.type === 'transcript') {
+        ttsActiveRef.current = false;
+        setChatMessages((prev) => [...prev, msg]);
+        return;
+      }
+
+      // Handle streaming LLM response
+      if (msg.type === 'llm_response') {
+        const p = msg.payload as unknown as LLMResponsePayload;
+        if (!p.done) {
+          // Accumulate deltas
+          llmBufferRef.current += p.delta;
+          // Replace or append streaming message in chat
+          setChatMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (
+              last &&
+              last.type === 'llm_response' &&
+              (last.payload as unknown as LLMResponsePayload).done === false
+            ) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...last,
+                  payload: {
+                    delta: llmBufferRef.current,
+                    done: false,
+                    total_duration: 0,
+                  },
+                },
+              ];
+            }
+            return [...prev, msg];
+          });
+          return;
+        }
+        // Final chunk — update the existing streaming message in-place
+        if (!llmBufferRef.current) return;
+        const finalText = llmBufferRef.current;
+        const finalDuration = p.total_duration;
+        llmBufferRef.current = '';
+
+        // PR 4: Only use SpeechSynthesis as fallback when Piper TTS is inactive
+        if (!ttsActiveRef.current) {
+          playSpeechSynthesisRef.current(finalText);
+        }
+        ttsActiveRef.current = false;
+
+        setChatMessages((prev) => {
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (
+              prev[i].type === 'llm_response' &&
+              (prev[i].payload as unknown as LLMResponsePayload).done === false
+            ) {
+              const updated = [...prev];
+              updated[i] = {
+                ...updated[i],
+                payload: {
+                  delta: finalText,
+                  done: true,
+                  total_duration: finalDuration,
+                },
+              };
+              return updated;
+            }
+          }
+          return [
+            ...prev,
+            {
+              type: 'llm_response',
+              session_id: msg.session_id,
+              timestamp: msg.timestamp,
               payload: {
                 delta: finalText,
                 done: true,
                 total_duration: finalDuration,
               },
-            };
-            return updated;
-          }
-        }
-        return [
-          ...prev,
-          {
-            type: 'llm_response',
-            session_id: msg.session_id,
-            timestamp: msg.timestamp,
-            payload: { delta: finalText, done: true, total_duration: finalDuration },
-          },
-        ];
-      });
-      return;
-    }
+            },
+          ];
+        });
+        return;
+      }
 
-    // Deduplicate ai_status — replace previous instead of appending
-    if (msg.type === 'ai_status') {
-      setChatMessages((prev) => {
-        const filtered = prev.filter((m) => m.type !== 'ai_status');
-        return [...filtered, msg];
-      });
-      return;
-    }
+      // Deduplicate ai_status — replace previous instead of appending
+      if (msg.type === 'ai_status') {
+        setChatMessages((prev) => {
+          const filtered = prev.filter((m) => m.type !== 'ai_status');
+          return [...filtered, msg];
+        });
+        return;
+      }
 
-    // Generic append for all other message types
-    setChatMessages((prev) => [...prev, msg]);
-  }, [ws.lastMessage, playPCM16, playSpeechSynthesis, stopPlayback]);
+      // Generic append for all other message types
+      setChatMessages((prev) => [...prev, msg]);
+    });
+  }, [ws.onMessage]);
 
   const handleStartConversation = useCallback(async () => {
     await media.startMedia();
@@ -203,14 +214,14 @@ function App() {
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
-    stopPlayback();
+    stopPlaybackRef.current();
     setConversationActive(false);
     setChatMessages([]);
     setTotalFrames(0);
     setTotalAudioMs(0);
     llmBufferRef.current = '';
     ttsActiveRef.current = false;
-  }, [media, stopPlayback]);
+  }, [media]);
 
   return (
     <div className="app">
