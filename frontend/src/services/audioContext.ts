@@ -24,12 +24,18 @@ export async function resumeAudioContext(): Promise<void> {
 
 /** Convert an ArrayBuffer to a base64 string for WebSocket transport.
  *
- * Uses TextDecoder('latin1') for safe byte→character mapping.
- * The manual String.fromCharCode loop corrupts bytes > 127 because
- * JavaScript strings are UTF-16 and concatenation can produce multi-byte
- * code units that btoa cannot process correctly.
+ * Chunked String.fromCharCode.apply approach — the most reliable
+ * binary-to-base64 method in browsers. TextDecoder('latin1') maps
+ * bytes 0x80-0x9F to windows-1252 characters (€, ‚, etc.) that
+ * are outside Latin-1 range, causing btoa to throw.
  */
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const binary = new TextDecoder('latin1').decode(new Uint8Array(buffer));
-  return btoa(binary);
+  const bytes = new Uint8Array(buffer);
+  const CHUNK = 0x2000; // 8KB chunks, well within Function.apply argument limit
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const chunk = bytes.subarray(i, i + CHUNK);
+    parts.push(String.fromCharCode.apply(null, Array.from(chunk)));
+  }
+  return btoa(parts.join(''));
 }
