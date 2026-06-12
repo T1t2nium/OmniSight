@@ -87,7 +87,9 @@ function App() {
         });
         return;
       }
-      // Final chunk — speak, remove streaming placeholders, append final
+      // Final chunk — speak, remove streaming placeholders, append final.
+      // Guard: Ollama may emit extra done=true lines with empty content.
+      if (!llmBufferRef.current) return;
       playAudio(llmBufferRef.current);
       setChatMessages((prev) => [
         ...prev.filter(

@@ -114,9 +114,6 @@ async def _handle_audio_chunk(
     try:
         raw_wav = base64.b64decode(b64_data)
 
-        # DEBUG: save the full received WAV for verification
-        _dump_raw_wav(raw_wav)
-
         # vad-web encodes WAV as IEEE_FLOAT (format=3), not PCM16 as
         # documented. Parse manually — stdlib wave can't read float WAV.
         pcm_data = _parse_wav_to_pcm16(raw_wav)

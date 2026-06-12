@@ -90,22 +90,10 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
             setIsSpeaking(false);
 
             try {
-              // Encode Float32Array@16kHz → WAV (PCM16) → base64
+              // Encode Float32Array@16kHz → WAV (IEEE_FLOAT) → base64
               const wavBuffer = utils.encodeWAV(audio);
               const base64 = arrayBufferToBase64(wavBuffer);
               const durationMs = (audio.length / 16000) * 1000;
-              console.log('[VAD] encoded WAV:', wavBuffer.byteLength, 'bytes → base64:', base64.length, 'chars, duration:', Math.round(durationMs), 'ms');
-
-              // DEBUG: play WAV locally to verify encoding is correct
-              try {
-                const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-                const url = URL.createObjectURL(blob);
-                const testAudio = new Audio(url);
-                testAudio.volume = 0.5;
-                testAudio.play().catch((e) => console.warn('[VAD] debug playback failed:', e));
-              } catch (e) {
-                console.warn('[VAD] debug playback error:', e);
-              }
 
               // Send audio FIRST so it's in the buffer when speech_end triggers pipeline
               sendMessage({
@@ -119,7 +107,6 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
                   duration_ms: Math.round(durationMs * 10) / 10,
                 },
               });
-              console.log('[VAD] audio_chunk sent');
 
               // Then signal speech end — backend triggers AI pipeline on this
               sendMessage({
@@ -128,7 +115,6 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
                 timestamp: Date.now() / 1000,
                 payload: { event: 'speech_end' },
               });
-              console.log('[VAD] vad_event(speech_end) sent');
             } catch (err) {
               console.error('[VAD] onSpeechEnd error:', err);
               setVadError(`Speech encoding failed: ${err instanceof Error ? err.message : String(err)}`);
