@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     frame_max_width: int = 640
     frame_max_height: int = 480
 
+    # Vision
+    vision_enabled: bool = True  # Set to False for text-only mode (faster on CPU)
+
     # TTS
     tts_backend: Literal["browser", "piper"] = "piper"
 

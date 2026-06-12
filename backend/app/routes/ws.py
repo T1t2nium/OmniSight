@@ -203,8 +203,11 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
         )
         return
 
-    # Get latest frame
-    latest_frame, _ = await state_manager.get_latest_frame(session_id)
+    # Get latest frame (only if vision is enabled in config)
+    settings = ws.app.state.settings
+    latest_frame = None
+    if settings.vision_enabled:
+        latest_frame, _ = await state_manager.get_latest_frame(session_id)
 
     # Get orchestrator from app state
     orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
