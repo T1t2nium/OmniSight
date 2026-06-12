@@ -30,10 +30,8 @@ function App() {
   const [totalAudioMs, setTotalAudioMs] = useState(0);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const llmBufferRef = useRef<string>('');
-  // PR 4: tracks whether Piper TTS audio was received for the current response
-  const ttsActiveRef = useRef<boolean>(false);
-  // PR 4: timer to delay SpeechSynthesis fallback (tts_audio may lag behind done=true)
-  const ttsFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // PR 4: tracks expected TTS provider for the current pipeline ('piper' | 'browser')
+  const ttsProviderRef = useRef<string>('browser');
 
   const media = useMediaStream();
   const ws = useWebSocket(sessionIdRef.current);
@@ -88,15 +86,16 @@ function App() {
         }
       }
 
+      // ---- PR 4: TTS provider announced at pipeline start ----
+      if (msg.type === 'tts_info') {
+        const p = msg.payload as unknown as { provider: string };
+        ttsProviderRef.current = p.provider || 'browser';
+        return;
+      }
+
       // ---- PR 4: TTS Audio playback ----
       if (msg.type === 'tts_audio') {
         const p = msg.payload as unknown as TTSAudioPayload;
-        // Cancel any pending SpeechSynthesis fallback (TTS won the race)
-        if (ttsFallbackTimerRef.current) {
-          clearTimeout(ttsFallbackTimerRef.current);
-          ttsFallbackTimerRef.current = null;
-        }
-        ttsActiveRef.current = true;
         playPCM16Ref.current(p.data, p.sample_rate, p.text);
         return;
       }
@@ -105,10 +104,6 @@ function App() {
       if (msg.type === 'interrupt') {
         console.log('[App] Interrupt received:', (msg.payload as unknown as InterruptPayload).reason);
         stopPlaybackRef.current();
-        if (ttsFallbackTimerRef.current) {
-          clearTimeout(ttsFallbackTimerRef.current);
-          ttsFallbackTimerRef.current = null;
-        }
         llmBufferRef.current = '';
         setChatMessages((prev) =>
           prev.filter(
@@ -120,13 +115,8 @@ function App() {
         return;
       }
 
-      // ---- New transcript: user spoke → reset TTS state ----
+      // ---- New transcript: user spoke → append to chat ----
       if (msg.type === 'transcript') {
-        ttsActiveRef.current = false;
-        if (ttsFallbackTimerRef.current) {
-          clearTimeout(ttsFallbackTimerRef.current);
-          ttsFallbackTimerRef.current = null;
-        }
         setChatMessages((prev) => [...prev, msg]);
         return;
       }
@@ -167,19 +157,11 @@ function App() {
         const finalDuration = p.total_duration;
         llmBufferRef.current = '';
 
-        // PR 4: Defer SpeechSynthesis fallback — Piper TTS audio may
-        // still be in transit (tts_audio is sent after LLM stream ends).
-        // If no tts_audio arrives within 500ms, fall back to browser TTS.
-        if (ttsFallbackTimerRef.current) {
-          clearTimeout(ttsFallbackTimerRef.current);
+        // PR 4: SpeechSynthesis only when backend explicitly says 'browser'.
+        // When Piper is active, the backend sends tts_audio separately.
+        if (ttsProviderRef.current === 'browser') {
+          playSpeechSynthesisRef.current(finalText);
         }
-        ttsFallbackTimerRef.current = setTimeout(() => {
-          if (!ttsActiveRef.current) {
-            playSpeechSynthesisRef.current(finalText);
-          }
-          ttsFallbackTimerRef.current = null;
-        }, 500);
-        ttsActiveRef.current = false;
 
         setChatMessages((prev) => {
           for (let i = prev.length - 1; i >= 0; i--) {
@@ -243,7 +225,7 @@ function App() {
     setTotalFrames(0);
     setTotalAudioMs(0);
     llmBufferRef.current = '';
-    ttsActiveRef.current = false;
+    ttsProviderRef.current = 'browser';
   }, [media]);
 
   return (

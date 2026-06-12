@@ -51,6 +51,11 @@ class ConversationOrchestrator:
         self._ollama = ollama
         self._tts = tts
 
+    @property
+    def tts_provider(self) -> str:
+        """Return 'piper' or 'browser' so the frontend knows what to expect."""
+        return "piper" if (self._tts and self._tts.ready) else "browser"
+
     async def process_utterance(
         self,
         pcm_bytes: bytes,
@@ -63,22 +68,20 @@ class ConversationOrchestrator:
         """Run the full AI pipeline on a single user utterance.
 
         Steps:
-        1. Send 'thinking' status
+        1. Send 'thinking' status + tts_info (tells frontend which TTS to expect)
         2. Convert PCM16 → float32 numpy array
         3. Transcribe via faster-whisper (in thread pool)
         4. Send transcript to frontend
-        5. Stream Ollama response as llm_response deltas
-        6. For each complete sentence: synthesize TTS → send tts_audio
-        7. Send remaining text as final TTS chunk
-        8. Send 'idle' status on completion
-
-        Cancellation (interrupt): if the asyncio task is cancelled mid-flight
-        (e.g., user starts speaking again), the CancelledError propagates
-        cleanly — subprocesses are killed, partial TTS is discarded.
+        5. Stream Ollama response as llm_response deltas, detect sentences
+        6. Concurrent TTS synthesis for collected sentences
+        7. Send 'idle' status on completion
         """
         await status_fn("thinking")
 
         try:
+            # ---- Tell frontend which TTS provider to expect ----
+            await send_fn("tts_info", {"provider": self.tts_provider})
+
             # ---- Step 2: PCM16 → float32 ----
             audio_array = (
                 np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
@@ -110,7 +113,7 @@ class ConversationOrchestrator:
             await status_fn("speaking")
             full_response = ""
             tts_pending_text = ""
-            tts_sentences: list[str] = []  # collect, synthesize AFTER stream
+            tts_sentences: list[str] = []
 
             async for chunk in self._ollama.chat(
                 text, image_base64=latest_frame_b64, history=history
@@ -124,17 +127,29 @@ class ConversationOrchestrator:
                     "total_duration": chunk.get("total_duration", 0.0),
                 })
 
-                # Detect sentence boundaries but DON'T await TTS here —
-                # Piper subprocess calls would block the LLM stream.
+                # Detect sentence boundaries — collect, don't synthesize yet
                 if self._tts and self._tts.ready:
                     sentences, tts_pending_text = split_sentences(tts_pending_text)
                     tts_sentences.extend(sentences)
 
-            # ---- Step 7: Synthesize TTS AFTER LLM stream is complete ----
+            # ---- Step 7: Synthesize TTS concurrently ----
             if tts_pending_text.strip():
                 tts_sentences.append(tts_pending_text.strip())
-            for sentence in tts_sentences:
-                await self._synthesize_and_send(sentence, send_fn)
+
+            if self._tts and self._tts.ready and tts_sentences:
+                # Launch all sentences as concurrent tasks.
+                # Piper subprocess calls are CPU-bound I/O (asyncio.to_thread),
+                # so parallel synthesis cuts total TTS time by ~3x for multi-sentence replies.
+                async def _synth(sentence: str) -> None:
+                    await self._synthesize_and_send(sentence, send_fn)
+
+                tasks = [asyncio.create_task(_synth(s)) for s in tts_sentences]
+                try:
+                    await asyncio.gather(*tasks)
+                except asyncio.CancelledError:
+                    for t in tasks:
+                        t.cancel()
+                    raise
 
             # ---- Step 8: Store assistant response for next turn ----
             if full_response:
@@ -175,4 +190,3 @@ class ConversationOrchestrator:
             raise
         except Exception as exc:
             logger.error("TTS synthesis failed for %r: %s", text[:80], exc)
-            # Non-fatal: TTS failure shouldn't break the text pipeline

@@ -67,6 +67,10 @@ export interface AIStatusPayload {
 
 // ---- PR 4: TTS Audio + Interrupt Payloads (Server → Client) ----
 
+export interface TTSInfoPayload {
+  provider: 'piper' | 'browser';
+}
+
 export interface TTSAudioPayload {
   data: string; // base64 PCM16 audio
   sample_rate: number;
