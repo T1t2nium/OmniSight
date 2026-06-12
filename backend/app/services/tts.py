@@ -1,15 +1,12 @@
 """Piper TTS service — local ONNX-based text-to-speech.
 
 Uses the official Piper executable (https://github.com/rhasspy/piper) via
-asyncio subprocess. Each sentence triggers a separate synthesis call; the
-OS page cache makes repeated loads fast after the first invocation.
+subprocess.run() wrapped in asyncio.to_thread(). This avoids Windows
+event-loop compatibility issues with asyncio.create_subprocess_exec().
 
 Sentence streaming: the orchestrator detects sentence boundaries in the
 LLM output, calls synthesize() per sentence, and sends each PCM16 chunk
 to the frontend for playback via Web Audio API.
-
-Interrupt: if the caller cancels the asyncio task, the running subprocess
-is killed and partial audio is discarded.
 """
 
 import asyncio
@@ -17,12 +14,12 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Piper voices available on huggingface.co/rhasspy/piper-voices
-# Default recommended voices for Chinese + English:
 RECOMMENDED_VOICES = {
     "zh_CN": "zh_CN-huayan-medium",
     "en_US": "en_US-lessac-medium",
@@ -35,6 +32,10 @@ class PiperTTSError(Exception):
 
 class PiperTTS:
     """Async wrapper around the Piper TTS executable.
+
+    Uses asyncio.to_thread + subprocess.run for maximum compatibility
+    with all event loop implementations (Windows Proactor/Selector,
+    uvloop, etc.).
 
     Usage:
         tts = PiperTTS(executable="piper", model="zh_CN-huayan-medium.onnx")
@@ -87,10 +88,14 @@ class PiperTTS:
         Reads the model config JSON to extract sample rate and language.
         Raises PiperTTSError if any requirement is missing.
         """
-        # Check executable
-        piper_path = shutil.which(self._executable) if self._executable == "piper" else self._executable
+        # Resolve executable path
+        piper_path = (
+            shutil.which(self._executable)
+            if self._executable == "piper"
+            else self._executable
+        )
         if not piper_path:
-            piper_path = self._executable  # absolute or relative path
+            piper_path = self._executable
         if not os.path.isfile(piper_path) and self._executable == "piper":
             raise PiperTTSError(
                 "Piper executable not found on PATH. "
@@ -114,7 +119,6 @@ class PiperTTS:
 
         # Check config
         if not os.path.isfile(self._config_path):
-            # Try auto-deriving from model path
             auto_config = self._model_path + ".json"
             if os.path.isfile(auto_config):
                 self._config_path = auto_config
@@ -133,19 +137,7 @@ class PiperTTS:
 
         # Verify executable actually runs (DLLs present, etc.)
         try:
-            proc = await asyncio.create_subprocess_exec(
-                self._executable, "--help",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                err = stderr.decode("utf-8", errors="replace").strip()
-                raise PiperTTSError(
-                    f"Piper executable failed to start (exit {proc.returncode}): {err}"
-                )
-        except asyncio.CancelledError:
-            raise
+            await self._run_piper(["--help"])
         except PiperTTSError:
             raise
         except FileNotFoundError:
@@ -174,7 +166,8 @@ class PiperTTS:
         self._ready = True
         logger.info(
             "Piper TTS ready: model=%s, sample_rate=%d, language=%s",
-            Path(self._model_path).name, self._sample_rate,
+            Path(self._model_path).name,
+            self._sample_rate,
             self._source_lang or "unknown",
         )
 
@@ -187,38 +180,21 @@ class PiperTTS:
         Returns:
             (pcm16_bytes, sample_rate) — raw 16-bit mono PCM at the voice's
             native sample rate.
-
-        Raises PiperTTSError on synthesis failure.
         """
         if not text or not text.strip():
             return b"", self._sample_rate
 
-        # Build the piper command
-        cmd = [self._executable, "--model", self._model_path, "--output-raw"]
+        args = ["--model", self._model_path, "--output-raw"]
         if self._config_path:
-            cmd.extend(["--config", self._config_path])
+            args.extend(["--config", self._config_path])
         if self._speaker is not None:
-            cmd.extend(["--speaker", str(self._speaker)])
+            args.extend(["--speaker", str(self._speaker)])
 
         logger.debug("Piper synthesizing: %r", text[:80])
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate(input=text.encode("utf-8"))
-
-            if proc.returncode != 0:
-                err_msg = stderr.decode("utf-8", errors="replace").strip()
-                raise PiperTTSError(
-                    f"Piper exited with code {proc.returncode}: {err_msg}"
-                )
-
+            stdout = await self._run_piper(args, stdin_input=text.encode("utf-8"))
             return stdout, self._sample_rate
-
         except asyncio.CancelledError:
             logger.debug("Piper synthesis cancelled")
             raise
@@ -232,12 +208,42 @@ class PiperTTS:
         except OSError as exc:
             raise PiperTTSError(
                 f"Piper failed to start (OS error {exc.errno}): {exc}\n"
-                f"Command: {' '.join(cmd)}\n"
                 "This usually means a required DLL is missing from the piper directory."
             )
         except Exception as exc:
             logger.exception("Piper synthesis raised unexpected exception")
-            raise PiperTTSError(f"Piper synthesis failed: {type(exc).__name__}: {exc}") from exc
+            raise PiperTTSError(
+                f"Piper synthesis failed: {type(exc).__name__}: {exc}"
+            ) from exc
+
+    async def _run_piper(
+        self, args: list[str], stdin_input: bytes | None = None
+    ) -> bytes:
+        """Run piper in a background thread via asyncio.to_thread.
+
+        Uses subprocess.run() for universal event-loop compatibility.
+        """
+        cmd = [self._executable] + args
+
+        def _sync() -> subprocess.CompletedProcess:
+            return subprocess.run(
+                cmd,
+                input=stdin_input,
+                capture_output=True,
+                # cwd = directory containing piper.exe, so relative DLL
+                # references resolve correctly
+                cwd=os.path.dirname(self._executable) or None,
+            )
+
+        proc = await asyncio.to_thread(_sync)
+
+        if proc.returncode != 0:
+            err_msg = proc.stderr.decode("utf-8", errors="replace").strip()
+            raise PiperTTSError(
+                f"Piper exited with code {proc.returncode}: {err_msg}"
+            )
+
+        return proc.stdout
 
 
 # ---- Helpers ----
