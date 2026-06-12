@@ -87,14 +87,13 @@ function App() {
         });
         return;
       }
-      // Final chunk — speak, remove streaming placeholders, append final.
+      // Final chunk — speak, remove ALL previous llm_response messages,
+      // append the final accumulated result.
       // Guard: Ollama may emit extra done=true lines with empty content.
       if (!llmBufferRef.current) return;
       playAudio(llmBufferRef.current);
       setChatMessages((prev) => [
-        ...prev.filter(
-          (m) => !(m.type === 'llm_response' && (m.payload as unknown as LLMResponsePayload).done === false)
-        ),
+        ...prev.filter((m) => m.type !== 'llm_response'),
         {
           type: 'llm_response',
           session_id: msg.session_id,
