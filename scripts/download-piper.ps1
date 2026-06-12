@@ -69,7 +69,7 @@ if (Test-Path $piperExe) {
 Write-Host ""
 Write-Host "[2/2] Downloading voice models..." -ForegroundColor Yellow
 
-$voiceBaseUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main/v1.0"
+$voiceBaseUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 
 $voices = @(
     @{
@@ -84,6 +84,11 @@ $voices = @(
     }
 )
 
+# HuggingFace requires a browser-like User-Agent for direct downloads
+$headers = @{
+    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
+
 foreach ($voice in $voices) {
     Write-Host "  Downloading $($voice.Name) — $($voice.Desc)..."
 
@@ -97,7 +102,7 @@ foreach ($voice in $voices) {
         if (Test-Path $modelFile) {
             Write-Host "    Model already exists, skipping: $modelFile"
         } else {
-            Invoke-WebRequest -Uri $modelUrl -OutFile $modelFile -UseBasicParsing
+            Invoke-WebRequest -Uri $modelUrl -OutFile $modelFile -Headers $headers -UseBasicParsing
             $sizeMB = [math]::Round((Get-Item $modelFile).Length / 1MB, 1)
             Write-Host "    Model: $sizeMB MB" -ForegroundColor Green
         }
@@ -109,7 +114,7 @@ foreach ($voice in $voices) {
         if (Test-Path $configFile) {
             Write-Host "    Config already exists, skipping: $configFile"
         } else {
-            Invoke-WebRequest -Uri $configUrl -OutFile $configFile -UseBasicParsing
+            Invoke-WebRequest -Uri $configUrl -OutFile $configFile -Headers $headers -UseBasicParsing
             Write-Host "    Config: OK" -ForegroundColor Green
         }
     } catch {
