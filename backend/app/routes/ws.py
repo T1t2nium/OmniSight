@@ -11,11 +11,9 @@ PR 3 additions:
 """
 
 import asyncio
-import io
 import json
 import base64
 import logging
-import wave
 from typing import Callable, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -119,10 +117,9 @@ async def _handle_audio_chunk(
         # DEBUG: save the full received WAV for verification
         _dump_raw_wav(raw_wav)
 
-        # Properly parse WAV using stdlib wave module — not blind [44:] strip.
-        # The WAV header can vary in size and may include extra chunks.
-        with wave.open(io.BytesIO(raw_wav), "rb") as wf:
-            pcm_data = wf.readframes(wf.getnframes())
+        # vad-web encodes WAV as IEEE_FLOAT (format=3), not PCM16 as
+        # documented. Parse manually — stdlib wave can't read float WAV.
+        pcm_data = _parse_wav_to_pcm16(raw_wav)
     except Exception:
         logger.exception("Failed to decode audio chunk for %s", session_id)
         return
@@ -228,6 +225,66 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
             _running_tasks.pop(session_id, None)
 
     task.add_done_callback(_cleanup)
+
+
+# ---- WAV Parser ----
+
+
+def _parse_wav_to_pcm16(raw: bytes) -> bytes:
+    """Parse a WAV file and return PCM16 bytes regardless of source format.
+
+    vad-web's encodeWAV() outputs IEEE_FLOAT (format tag 3) WAV, not PCM16
+    as documented. We manually parse the WAV header and convert to PCM16.
+    """
+    import struct
+    import numpy as np
+
+    if len(raw) < 44:
+        raise ValueError(f"WAV too short: {len(raw)} bytes")
+
+    # RIFF header validation
+    riff, wave = struct.unpack_from("<4s4s", raw, 8)
+    if riff[:4] != b"RIFF" or wave != b"WAVE":
+        # retry: riff tag might be at offset 0
+        riff = raw[:4]
+        if riff != b"RIFF":
+            raise ValueError("Not a valid RIFF WAV")
+
+    # Scan chunks for fmt and data
+    fmt_tag = 0
+    bits_per_sample = 0
+    data_offset = 0
+    data_size = 0
+
+    pos = 12  # After "RIFF....WAVE"
+    while pos < len(raw) - 8:
+        chunk_id, chunk_size = struct.unpack_from("<4sI", raw, pos)
+        pos += 8
+        if chunk_id == b"fmt ":
+            fmt_tag = struct.unpack_from("<H", raw, pos)[0]
+            bits_per_sample = struct.unpack_from("<H", raw, pos + 14)[0]
+        elif chunk_id == b"data":
+            data_offset = pos
+            data_size = chunk_size
+            break
+        pos += chunk_size
+
+    if not data_offset:
+        raise ValueError("No data chunk in WAV")
+
+    samples_raw = raw[data_offset : data_offset + data_size]
+
+    if fmt_tag == 3:  # IEEE_FLOAT (32-bit)
+        arr = np.frombuffer(samples_raw, dtype=np.float32).copy()
+        arr = np.clip(arr, -1.0, 1.0)
+        pcm = (arr * 32767.0).astype(np.int16)
+        return pcm.tobytes()
+
+    elif fmt_tag == 1:  # PCM
+        return samples_raw
+
+    else:
+        raise ValueError(f"Unsupported WAV format: {fmt_tag}")
 
 
 # ---- Debug ----
