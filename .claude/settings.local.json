@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where uv *)",
+      "Bash(uv --version)"
+    ]
+  }
+}
