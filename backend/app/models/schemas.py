@@ -89,3 +89,20 @@ class AIStatusPayload(BaseModel):
     """AI pipeline status for frontend visual feedback."""
 
     status: Literal["listening", "thinking", "speaking", "idle"] = "idle"
+
+
+# ---- PR 4: TTS Audio + Interrupt Payloads (Server → Client) ----
+
+class TTSAudioPayload(BaseModel):
+    """PCM16 audio chunk produced by Piper TTS for a single sentence."""
+
+    data: str  # base64 PCM16 audio
+    sample_rate: int = 22050
+    channels: int = 1
+    text: str = ""  # The sentence being spoken (for UI display)
+
+
+class InterruptPayload(BaseModel):
+    """Sent by server to confirm AI generation has been interrupted."""
+
+    reason: str = "user_interrupt"

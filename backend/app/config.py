@@ -41,7 +41,13 @@ class Settings(BaseSettings):
     frame_max_height: int = 480
 
     # TTS
-    tts_backend: Literal["browser", "piper"] = "browser"
+    tts_backend: Literal["browser", "piper"] = "piper"
+
+    # Piper TTS (local ONNX-based TTS engine)
+    piper_executable: str = "piper"  # Path to piper executable (or "piper" if on PATH)
+    piper_model: str = ""  # Path to .onnx voice model file
+    piper_model_config: str = ""  # Path to .onnx.json config file (auto-derived if empty)
+    piper_speaker: int | None = None  # Speaker ID for multi-speaker voices
 
 
 @lru_cache
