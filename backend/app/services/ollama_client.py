@@ -61,6 +61,10 @@ class OllamaClient:
             "model": self._model,
             "messages": messages,
             "stream": True,
+            # Qwen 3.5 has built-in thinking/reasoning mode that burns
+            # ~100+s of internal tokens before producing output.
+            # This is equivalent to appending /no_think to every prompt.
+            "enable_thinking": False,
         }
 
         async with self._client.stream(
