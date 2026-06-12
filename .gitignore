@@ -32,4 +32,5 @@ Thumbs.db
 # Models (download separately)
 backend/models/
 *.onnx
+!frontend/public/silero_vad_v5.onnx
 *.bin

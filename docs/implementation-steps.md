@@ -8,7 +8,7 @@
 
 | PR | 分支 | 目标 | 依赖 |
 |----|------|------|------|
-| 1 | `phase/1-project-setup` | 项目初始化、文档、开发环境 | 无 |
+| 1 | `phase/1-project-setup` | 项目初始化、文档、开发环境 ✅ | 无 |
 | 2 | `phase/2-ws-streaming` | 音视频传输管道（无 AI） | PR 1 |
 | 3 | `phase/3-local-ai-core` | Ollama + faster-whisper 核心对话 | PR 2 |
 | 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 | PR 3 |
@@ -20,29 +20,29 @@
 
 ### 任务清单
 
-- [ ] 创建文件夹结构
-- [ ] 编写 docs/requirements.md
-- [ ] 编写 docs/tech-stack.md
-- [ ] 编写 docs/architecture.md
-- [ ] 编写 docs/implementation-steps.md
-- [ ] 创建 dev-logs/INDEX.md（含模板）
-- [ ] 更新 CLAUDE.md（项目指引）
-- [ ] 创建 .gitignore
-- [ ] 创建 .env.example
-- [ ] 创建 README.md
-- [ ] 创建 backend/pyproject.toml（uv 项目声明）
-- [ ] 创建 backend/app/__init__.py + main.py（最小骨架）
-- [ ] 创建 frontend/package.json
-- [ ] 创建 frontend 配置（tsconfig.json, vite.config.ts, index.html）
-- [ ] 创建 frontend/src/main.tsx + App.tsx（空白页）
-- [ ] 创建 scripts/setup.bat, run-backend.bat, run-frontend.bat
-- [ ] git init + 首 commit
+- [x] 创建文件夹结构
+- [x] 编写 docs/requirements.md
+- [x] 编写 docs/tech-stack.md
+- [x] 编写 docs/architecture.md
+- [x] 编写 docs/implementation-steps.md
+- [x] 创建 dev-logs/INDEX.md（含模板）
+- [x] 更新 CLAUDE.md（项目指引）
+- [x] 创建 .gitignore
+- [x] 创建 .env.example
+- [x] 创建 README.md
+- [x] 创建 backend/pyproject.toml（uv 项目声明）
+- [x] 创建 backend/app/__init__.py + main.py（最小骨架）
+- [x] 创建 frontend/package.json
+- [x] 创建 frontend 配置（tsconfig.json, vite.config.ts, index.html）
+- [x] 创建 frontend/src/main.tsx + App.tsx（空白页）
+- [x] 创建 scripts/setup.bat, run-backend.bat, run-frontend.bat
+- [x] git init + 首 commit（GitHub 私有仓库已创建）
 
 ### 验证标准
 
-- `scripts/setup.bat` 执行成功
-- `uv run uvicorn app.main:app` 启动无报错，`/health` 返回 200
-- `npm run dev` 打开空白页面
+- ✅ `scripts/setup.bat` 执行成功
+- ✅ `uv run uvicorn app.main:app` 启动无报错，`/health` 返回 200
+- ✅ `npm run dev` 打开空白页面，TypeScript 类型检查零错误
 
 ---
 
