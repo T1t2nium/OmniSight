@@ -28,7 +28,7 @@ function App() {
 
   const media = useMediaStream();
   const ws = useWebSocket(sessionIdRef.current);
-  const audioPlayer = useAudioPlayer();
+  const { playAudio, stopPlayback } = useAudioPlayer();
   const vad = useVAD({
     stream: media.stream,
     sessionId: sessionIdRef.current,
@@ -88,7 +88,7 @@ function App() {
         return;
       }
       // Final chunk — speak, remove streaming placeholders, append final
-      audioPlayer.playAudio(llmBufferRef.current);
+      playAudio(llmBufferRef.current);
       setChatMessages((prev) => [
         ...prev.filter(
           (m) => !(m.type === 'llm_response' && (m.payload as unknown as LLMResponsePayload).done === false)
@@ -119,7 +119,7 @@ function App() {
 
     // Generic append for all other message types
     setChatMessages((prev) => [...prev, msg]);
-  }, [ws.lastMessage, audioPlayer]);
+  }, [ws.lastMessage, playAudio]);
 
   const handleStartConversation = useCallback(async () => {
     await media.startMedia();
@@ -128,13 +128,13 @@ function App() {
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
-    audioPlayer.stopPlayback();
+    stopPlayback();
     setConversationActive(false);
     setChatMessages([]);
     setTotalFrames(0);
     setTotalAudioMs(0);
     llmBufferRef.current = '';
-  }, [media, audioPlayer]);
+  }, [media, stopPlayback]);
 
   return (
     <div className="app">

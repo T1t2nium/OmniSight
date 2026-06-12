@@ -96,6 +96,17 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
               const durationMs = (audio.length / 16000) * 1000;
               console.log('[VAD] encoded WAV:', wavBuffer.byteLength, 'bytes → base64:', base64.length, 'chars, duration:', Math.round(durationMs), 'ms');
 
+              // DEBUG: play WAV locally to verify encoding is correct
+              try {
+                const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                const testAudio = new Audio(url);
+                testAudio.volume = 0.5;
+                testAudio.play().catch((e) => console.warn('[VAD] debug playback failed:', e));
+              } catch (e) {
+                console.warn('[VAD] debug playback error:', e);
+              }
+
               // Send audio FIRST so it's in the buffer when speech_end triggers pipeline
               sendMessage({
                 type: 'audio_chunk',
