@@ -12,7 +12,11 @@ import { useFrameCapture } from './hooks/useFrameCapture';
 import type { WSMessage, LLMResponsePayload } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
-const MUTED_ECHO_TYPES = new Set(['video_frame']);
+const MUTED_ECHO_TYPES = new Set([
+  'video_frame',
+  'vad_event:speech_start',
+  'vad_event:speech_end',
+]);
 
 function App() {
   const [conversationActive, setConversationActive] = useState(false);
@@ -99,6 +103,15 @@ function App() {
         },
       ]);
       llmBufferRef.current = '';
+      return;
+    }
+
+    // Deduplicate ai_status — replace previous instead of appending
+    if (msg.type === 'ai_status') {
+      setChatMessages((prev) => {
+        const filtered = prev.filter((m) => m.type !== 'ai_status');
+        return [...filtered, msg];
+      });
       return;
     }
 

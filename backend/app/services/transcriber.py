@@ -17,10 +17,10 @@ class AudioTranscriber:
 
     def __init__(self, model_size: str = "base", language: str | None = None) -> None:
         logger.info(
-            "Loading faster-whisper model '%s' (device=cpu, compute_type=int8)...",
+            "Loading faster-whisper model '%s' (device=cpu, compute_type=auto)...",
             model_size,
         )
-        self._model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        self._model = WhisperModel(model_size, device="cpu", compute_type="auto")
         self._language = language
         logger.info("faster-whisper model ready")
 
@@ -42,7 +42,13 @@ class AudioTranscriber:
             language=self._language,
         )
         text = "".join(seg.text for seg in segments)
-        return text.strip(), info.language, info.duration
+        full_text = text.strip()
+        if not full_text:
+            logger.warning(
+                "Empty transcript — audio_duration=%.1fs, detected_language=%s",
+                info.duration, info.language,
+            )
+        return full_text, info.language, info.duration
 
     @property
     def language(self) -> str | None:
