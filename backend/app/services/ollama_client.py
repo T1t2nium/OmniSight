@@ -61,6 +61,9 @@ class OllamaClient:
             "model": self._model,
             "messages": messages,
             "stream": True,
+            # Disable Qwen thinking mode — skip internal reasoning tokens
+            # to reduce latency (otherwise each reply is ~2x slower).
+            "enable_thinking": False,
         }
 
         async with self._client.stream(
