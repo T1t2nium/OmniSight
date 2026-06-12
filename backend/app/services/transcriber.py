@@ -40,6 +40,12 @@ class AudioTranscriber:
             self._model.transcribe,
             audio,
             language=self._language,
+            # Disable language-biased thresholds that filter out Chinese speech.
+            # base model produces lower avg_logprob for non-English → falsely
+            # classified as "silence" when no_speech_threshold=0.6 (default).
+            no_speech_threshold=None,
+            log_prob_threshold=None,
+            compression_ratio_threshold=None,
         )
         text = "".join(seg.text for seg in segments)
         full_text = text.strip()
