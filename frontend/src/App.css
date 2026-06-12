@@ -287,6 +287,14 @@ body {
   margin: 0;
 }
 
+/* ===== Live Stats ===== */
+
+.stats {
+  font-size: 0.75rem;
+  color: #8b949e;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
 /* ===== Error Indicators ===== */
 
 .media-error,

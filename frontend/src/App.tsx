@@ -11,9 +11,14 @@ import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useFrameCapture } from './hooks/useFrameCapture';
 import type { WSMessage } from './types';
 
+/** Mute repetitive echo types (fired at high frequency). */
+const MUTED_ECHO_TYPES = new Set(['video_frame']);
+
 function App() {
   const [conversationActive, setConversationActive] = useState(false);
   const [chatMessages, setChatMessages] = useState<WSMessage[]>([]);
+  const [totalFrames, setTotalFrames] = useState(0);
+  const [totalAudioMs, setTotalAudioMs] = useState(0);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
 
   const media = useMediaStream();
@@ -34,11 +39,24 @@ function App() {
     enabled: conversationActive && media.cameraEnabled,
   });
 
-  // Append each received server message to the chat log
+  // Process incoming messages: update stats, filter muted echoes from chat log
   useEffect(() => {
-    if (ws.lastMessage) {
-      setChatMessages((prev) => [...prev, ws.lastMessage!]);
+    const msg = ws.lastMessage;
+    if (!msg) return;
+
+    // Extract stats from echo payloads
+    if (msg.type === 'echo') {
+      const p = msg.payload as Record<string, unknown>;
+      if (typeof p.total_frames === 'number') setTotalFrames(p.total_frames);
+      if (typeof p.total_audio_ms === 'number') setTotalAudioMs(p.total_audio_ms);
+
+      // Skip high-frequency echoes that would spam the log
+      if (typeof p.received_type === 'string' && MUTED_ECHO_TYPES.has(p.received_type)) {
+        return;
+      }
     }
+
+    setChatMessages((prev) => [...prev, msg]);
   }, [ws.lastMessage]);
 
   const handleStartConversation = useCallback(async () => {
@@ -50,6 +68,8 @@ function App() {
     media.stopMedia();
     setConversationActive(false);
     setChatMessages([]);
+    setTotalFrames(0);
+    setTotalAudioMs(0);
   }, [media]);
 
   return (
@@ -70,6 +90,11 @@ function App() {
             vadReady={vad.vadReady}
             micEnabled={media.micEnabled}
           />
+          {conversationActive && (
+            <span className="stats">
+              Frames: {totalFrames} &middot; Audio: {(totalAudioMs / 1000).toFixed(1)}s
+            </span>
+          )}
           <ConnectionStatus state={ws.connectionState} />
           {media.error && <span className="media-error">{media.error}</span>}
           {vad.vadError && <span className="vad-error">VAD: {vad.vadError}</span>}
