@@ -10,7 +10,7 @@
 |----|------|------|------|
 | 1 | `phase/1-project-setup` | 项目初始化、文档、开发环境 ✅ | 无 |
 | 2 | `phase/2-ws-streaming` | 音视频传输管道（无 AI） ✅ | PR 1 |
-| 3 | `phase/3-local-ai-core` | Ollama + faster-whisper 核心对话 | PR 2 |
+| 3 | `phase/3-local-ai-core` | Ollama + faster-whisper 核心对话 ✅ | PR 2 |
 | 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 | PR 3 |
 | 5 | `phase/5-polish` | 健壮性、性能优化、测试 | PR 4 |
 
@@ -75,22 +75,26 @@
 
 ### 任务清单
 
-- [ ] 后端：AIClient 抽象基类
-- [ ] 后端：OllamaClient 实现
-- [ ] 后端：faster-whisper STT 封装
-- [ ] 后端：FrameManager 帧率控制
-- [ ] 后端：TTS 抽象（初版：浏览器 SpeechSynthesis）
-- [ ] 后端：ws.py 集成全链路
-- [ ] 前端：useAudioPlayer 音频播放队列
-- [ ] 前端：ChatLog 对话记录展示
-- [ ] 前端：消息类型扩展
+- [x] 后端：OllamaClient（httpx NDJSON 流式 + enable_thinking=False）
+- [x] 后端：AudioTranscriber（faster-whisper small, 阈值=disabled, asyncio.to_thread）
+- [x] 后端：ConversationOrchestrator（全链路编排：PCM→float32→transcribe→chat→stream）
+- [x] 后端：WAV 解析器（手动解析 IEEE_FLOAT format tag 3 → PCM16）
+- [x] 后端：config.py（Pydantic Settings 加载 .env）
+- [x] 后端：ws.py 集成全链路（video_frame 存帧, speech_end 触发 pipeline, 后台任务管理）
+- [x] 后端：schemas.py 扩展（TranscriptPayload, LLMResponsePayload, AIStatusPayload）
+- [x] 后端：main.py lifespan 初始化 AI 服务 + /health ollama_available
+- [x] 前端：useAudioPlayer（SpeechSynthesis TTS, playAudio/stopPlayback）
+- [x] 前端：ChatLog 条件渲染（蓝色用户气泡 / 灰色 AI 气泡流式闪烁 / ai_status / error）
+- [x] 前端：消息类型扩展（TranscriptPayload, LLMResponsePayload, AIStatusPayload）
+- [x] 前端：App.tsx llm_response delta 累积 + done=true 原地更新气泡 + TTS 触发
 
 ### 验证标准
 
-- Ollama 模型正常响应
-- whisper 正确转写
-- AI 能结合视频内容回答
-- 浏览器播放语音回复
+- ✅ Ollama 模型正常响应（qwen3.5:2b-bf16, enable_thinking=False）
+- ✅ whisper 正确转写（small 模型, 中文, 阈值 disabled）
+- ✅ AI 结合视频内容回答（latest_frame 传图）
+- ✅ 浏览器 SpeechSynthesis 朗读回复
+- ✅ AI 回复气泡流式显示 + 时间标注
 
 ---
 
