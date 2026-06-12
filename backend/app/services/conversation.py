@@ -106,10 +106,11 @@ class ConversationOrchestrator:
             history = history or []
             history.append({"role": "user", "content": text})
 
-            # ---- Step 6: Stream Ollama response + detect sentences ----
+            # ---- Step 6: Stream Ollama response (NEVER block on TTS) ----
             await status_fn("speaking")
             full_response = ""
-            tts_pending_text = ""  # text accumulated since last sentence boundary
+            tts_pending_text = ""
+            tts_sentences: list[str] = []  # collect, synthesize AFTER stream
 
             async for chunk in self._ollama.chat(
                 text, image_base64=latest_frame_b64, history=history
@@ -123,15 +124,17 @@ class ConversationOrchestrator:
                     "total_duration": chunk.get("total_duration", 0.0),
                 })
 
-                # ---- Check for complete sentences → TTS ----
+                # Detect sentence boundaries but DON'T await TTS here —
+                # Piper subprocess calls would block the LLM stream.
                 if self._tts and self._tts.ready:
                     sentences, tts_pending_text = split_sentences(tts_pending_text)
-                    for sentence in sentences:
-                        await self._synthesize_and_send(sentence, send_fn)
+                    tts_sentences.extend(sentences)
 
-            # ---- Step 7: Synthesize remaining text ----
-            if self._tts and self._tts.ready and tts_pending_text.strip():
-                await self._synthesize_and_send(tts_pending_text.strip(), send_fn)
+            # ---- Step 7: Synthesize TTS AFTER LLM stream is complete ----
+            if tts_pending_text.strip():
+                tts_sentences.append(tts_pending_text.strip())
+            for sentence in tts_sentences:
+                await self._synthesize_and_send(sentence, send_fn)
 
             # ---- Step 8: Store assistant response for next turn ----
             if full_response:
