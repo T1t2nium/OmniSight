@@ -47,6 +47,24 @@ export interface ErrorPayload {
   message: string;
 }
 
+// ---- PR 3: AI Pipeline Payloads (Server → Client) ----
+
+export interface TranscriptPayload {
+  text: string;
+  language: string;
+  duration_ms: number;
+}
+
+export interface LLMResponsePayload {
+  delta: string;
+  done: boolean;
+  total_duration: number;
+}
+
+export interface AIStatusPayload {
+  status: 'listening' | 'thinking' | 'speaking' | 'idle';
+}
+
 // ---- UI State Types ----
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';

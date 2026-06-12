@@ -65,6 +65,15 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
             'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/',
           processorType: 'ScriptProcessor',
 
+          // VAD tuning: moderately faster than defaults for Chinese speech.
+          // negativeSpeechThreshold must stay low (≤0.25) or background noise
+          // prevents speech_end from ever firing.
+          positiveSpeechThreshold: 0.3,
+          negativeSpeechThreshold: 0.2,
+          redemptionMs: 800,
+          preSpeechPadMs: 400,
+          minSpeechMs: 200,
+
           onSpeechStart: () => {
             if (cancelled) return;
             setIsSpeaking(true);
@@ -80,22 +89,36 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
             if (cancelled) return;
             setIsSpeaking(false);
 
-            // Encode Float32Array@16kHz → WAV (PCM16) → base64
-            const wavBuffer = utils.encodeWAV(audio);
-            const base64 = arrayBufferToBase64(wavBuffer);
-            const durationMs = (audio.length / 16000) * 1000;
+            try {
+              // Encode Float32Array@16kHz → WAV (IEEE_FLOAT) → base64
+              const wavBuffer = utils.encodeWAV(audio);
+              const base64 = arrayBufferToBase64(wavBuffer);
+              const durationMs = (audio.length / 16000) * 1000;
 
-            sendMessage({
-              type: 'audio_chunk',
-              session_id: sessionId,
-              timestamp: Date.now() / 1000,
-              payload: {
-                data: base64,
-                sample_rate: 16000,
-                channels: 1,
-                duration_ms: Math.round(durationMs * 10) / 10,
-              },
-            });
+              // Send audio FIRST so it's in the buffer when speech_end triggers pipeline
+              sendMessage({
+                type: 'audio_chunk',
+                session_id: sessionId,
+                timestamp: Date.now() / 1000,
+                payload: {
+                  data: base64,
+                  sample_rate: 16000,
+                  channels: 1,
+                  duration_ms: Math.round(durationMs * 10) / 10,
+                },
+              });
+
+              // Then signal speech end — backend triggers AI pipeline on this
+              sendMessage({
+                type: 'vad_event',
+                session_id: sessionId,
+                timestamp: Date.now() / 1000,
+                payload: { event: 'speech_end' },
+              });
+            } catch (err) {
+              console.error('[VAD] onSpeechEnd error:', err);
+              setVadError(`Speech encoding failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
           },
 
           onVADMisfire: () => {

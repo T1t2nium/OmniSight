@@ -64,3 +64,28 @@ class ErrorPayload(BaseModel):
     """Server error notification."""
 
     message: str
+
+
+# ---- PR 3: AI Pipeline Payloads (Server → Client) ----
+
+
+class TranscriptPayload(BaseModel):
+    """Sent when user speech has been transcribed by faster-whisper."""
+
+    text: str
+    language: str = ""
+    duration_ms: float = 0.0
+
+
+class LLMResponsePayload(BaseModel):
+    """Streaming AI response chunk. delta is incremental text content."""
+
+    delta: str
+    done: bool = False
+    total_duration: float = 0.0  # seconds, only meaningful when done=True
+
+
+class AIStatusPayload(BaseModel):
+    """AI pipeline status for frontend visual feedback."""
+
+    status: Literal["listening", "thinking", "speaking", "idle"] = "idle"

@@ -31,6 +31,12 @@ class AudioBufferManager:
         self._buffers.pop(session_id, None)
         self._durations.pop(session_id, None)
 
+    def flush(self, session_id: str) -> tuple[bytes, float]:
+        """Get accumulated audio AND clear the buffer — atomic convenience."""
+        pcm, duration = self.get_audio(session_id)
+        self.clear(session_id)
+        return pcm, duration
+
     def clear_all(self) -> None:
         """Remove all sessions (used at shutdown)."""
         self._buffers.clear()
