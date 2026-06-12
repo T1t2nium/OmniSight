@@ -11,9 +11,11 @@ PR 3 additions:
 """
 
 import asyncio
+import io
 import json
 import base64
 import logging
+import wave
 from typing import Callable, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -114,11 +116,13 @@ async def _handle_audio_chunk(
     try:
         raw_wav = base64.b64decode(b64_data)
 
-        # DEBUG: save the full received WAV (with original header) to compare
-        # with frontend-side encoding. If this plays clean, base64 is correct.
+        # DEBUG: save the full received WAV for verification
         _dump_raw_wav(raw_wav)
 
-        pcm_data = raw_wav[44:] if len(raw_wav) > 44 else raw_wav
+        # Properly parse WAV using stdlib wave module — not blind [44:] strip.
+        # The WAV header can vary in size and may include extra chunks.
+        with wave.open(io.BytesIO(raw_wav), "rb") as wf:
+            pcm_data = wf.readframes(wf.getnframes())
     except Exception:
         logger.exception("Failed to decode audio chunk for %s", session_id)
         return
@@ -161,6 +165,10 @@ async def _handle_vad_event(
     """Handle VAD events. On speech_end, launch the AI pipeline."""
     event = payload.get("event", "unknown")
     logger.info("VAD %s [%s]", event, session_id)
+
+    if event == "speech_start":
+        # Clear any residual audio from previous VAD cycle
+        audio_manager.clear(session_id)
 
     if event == "speech_end":
         await _start_ai_pipeline(ws, session_id)
