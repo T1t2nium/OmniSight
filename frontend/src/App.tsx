@@ -87,10 +87,12 @@ function App() {
         });
         return;
       }
-      // Final chunk — speak and append final message
+      // Final chunk — speak, remove streaming placeholders, append final
       audioPlayer.playAudio(llmBufferRef.current);
       setChatMessages((prev) => [
-        ...prev,
+        ...prev.filter(
+          (m) => !(m.type === 'llm_response' && (m.payload as unknown as LLMResponsePayload).done === false)
+        ),
         {
           type: 'llm_response',
           session_id: msg.session_id,
