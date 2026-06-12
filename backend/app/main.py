@@ -1,16 +1,24 @@
 """OmniSight Backend - AI Visual Conversation Assistant."""
 
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.routes.ws import router as ws_router
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    # Startup
+    logging.info("OmniSight backend starting up")
     yield
-    # Shutdown
+    logging.info("OmniSight backend shutting down")
 
 
 app = FastAPI(
@@ -28,6 +36,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount routers
+app.include_router(ws_router)
 
 
 @app.get("/health")
