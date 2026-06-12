@@ -8,6 +8,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useVAD } from './hooks/useVAD';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { useFrameCapture } from './hooks/useFrameCapture';
 import type { WSMessage } from './types';
 
 function App() {
@@ -24,6 +25,14 @@ function App() {
     enabled: conversationActive && media.micEnabled,
   });
   void useAudioPlayer(); // Placeholder — PR 3 implements actual playback
+
+  // Periodic video frame capture (4 FPS JPEG via WebSocket)
+  useFrameCapture({
+    stream: media.stream,
+    sessionId: sessionIdRef.current,
+    sendMessage: ws.send,
+    enabled: conversationActive && media.cameraEnabled,
+  });
 
   // Append each received server message to the chat log
   useEffect(() => {
