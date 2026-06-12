@@ -3,6 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -48,6 +49,14 @@ class Settings(BaseSettings):
     piper_model: str = ""  # Path to .onnx voice model file
     piper_model_config: str = ""  # Path to .onnx.json config file (auto-derived if empty)
     piper_speaker: int | None = None  # Speaker ID for multi-speaker voices
+
+    @field_validator("piper_speaker", mode="before")
+    @classmethod
+    def _empty_to_none(cls, v: object) -> int | None:
+        """Coerce empty-string env var to None for optional int fields."""
+        if v is None or v == "" or v == "None":
+            return None
+        return int(v)
 
 
 @lru_cache
