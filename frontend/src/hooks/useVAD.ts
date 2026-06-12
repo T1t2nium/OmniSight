@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { MicVAD, utils } from '@ricky0123/vad-web';
-import { getAudioContext } from '../services/audioContext';
-import { arrayBufferToBase64 } from '../services/audioContext';
+import { getAudioContext, arrayBufferToBase64 } from '../services/audioContext';
 import type { WSMessage } from '../types';
+import type { MicVAD } from '@ricky0123/vad-web';
 
 export interface UseVADOptions {
   stream: MediaStream | null;
@@ -20,7 +19,10 @@ export interface UseVADReturn {
 /**
  * Wraps @ricky0123/vad-web MicVAD in React lifecycle.
  *
- * When enabled and a stream is available, initialises the VAD and:
+ * Uses DYNAMIC import to avoid blocking page load — vad-web + onnxruntime-web
+ * are loaded lazily only when the user starts a conversation.
+ *
+ * When enabled and a stream is available:
  *   - onSpeechStart → sends vad_event{speech_start}
  *   - onSpeechEnd   → encodes audio as WAV(base64) → sends audio_chunk
  */
@@ -41,13 +43,20 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
 
     (async () => {
       try {
+        // Dynamic import — vad-web loads onnxruntime-web internally which
+        // does its own WASM fetching and must not be pre-bundled by Vite.
+        const { MicVAD: VAD, utils } = await import('@ricky0123/vad-web');
         const audioContext = getAudioContext();
 
-        const vad = await MicVAD.new({
+        const vad = await VAD.new({
           audioContext,
           getStream: () => Promise.resolve(stream),
           startOnLoad: true,
           model: 'v5',
+          // Self-hosted assets in public/ (served at / by Vite dev server)
+          baseAssetPath: '/',
+          onnxWASMBasePath: '/',
+          processorType: 'ScriptProcessor',
 
           onSpeechStart: () => {
             if (cancelled) return;
