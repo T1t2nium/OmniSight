@@ -9,7 +9,7 @@
 | PR | 分支 | 目标 | 依赖 |
 |----|------|------|------|
 | 1 | `phase/1-project-setup` | 项目初始化、文档、开发环境 ✅ | 无 |
-| 2 | `phase/2-ws-streaming` | 音视频传输管道（无 AI） | PR 1 |
+| 2 | `phase/2-ws-streaming` | 音视频传输管道（无 AI） ✅ | PR 1 |
 | 3 | `phase/3-local-ai-core` | Ollama + faster-whisper 核心对话 | PR 2 |
 | 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 | PR 3 |
 | 5 | `phase/5-polish` | 健壮性、性能优化、测试 | PR 4 |
@@ -50,24 +50,24 @@
 
 ### 任务清单
 
-- [ ] 后端：FastAPI + CORS + WebSocket `/ws` 端点
-- [ ] 后端：PCM 缓冲管理 (audio.py)
-- [ ] 后端：连接状态管理 (state.py)
-- [ ] 后端：健康检查路由 (health.py)
-- [ ] 后端：消息模型定义 (schemas.py)
-- [ ] 前端：WebSocket 客户端封装 (wsClient.ts)
-- [ ] 前端：AudioContext 管理 (audioContext.ts)
-- [ ] 前端：hooks（useWebSocket, useMediaStream, useVAD, useAudioPlayer）
-- [ ] 前端：组件（VideoPanel, AudioIndicator, ConnectionStatus, ControlBar, ChatLog）
-- [ ] 前端：App 布局 + 样式
-- [ ] Vite WebSocket 代理配置
+- [x] 后端：FastAPI + CORS + WebSocket `/ws` 端点
+- [x] 后端：PCM 缓冲管理 (audio.py)
+- [x] 后端：连接状态管理 (state.py)
+- [x] 后端：健康检查路由 (health.py)
+- [x] 后端：消息模型定义 (schemas.py)
+- [x] 前端：WebSocket 客户端封装 (wsClient.ts)
+- [x] 前端：AudioContext 管理 (audioContext.ts)
+- [x] 前端：hooks（useWebSocket, useMediaStream, useVAD, useAudioPlayer, useFrameCapture）
+- [x] 前端：组件（VideoPanel, AudioIndicator, ConnectionStatus, ControlBar, ChatLog）
+- [x] 前端：App 布局 + 样式
+- [x] Vite WebSocket 代理配置
 
 ### 验证标准
 
-- 摄像头预览正常
-- VAD 检测说话状态
-- WebSocket 连接成功
-- 服务器回显音频/帧信息
+- ✅ 摄像头预览正常（镜像）
+- ✅ VAD 检测说话状态（Listening/Speaking）
+- ✅ WebSocket 连接成功（Connected 绿灯）
+- ✅ 服务器回显音频时长 + 帧计数（状态栏实时更新）
 
 ---
 

@@ -1,8 +1,9 @@
 # 2026-06-12: PR 2 — WebSocket 媒体流骨架
 
-**分支**: phase/2-ws-streaming
-**PR**: [#1](https://github.com/T1t2nium/OmniSight/pull/1)
-**文件变更**: 30 files (+6240 / -35)
+**分支**: phase/2-ws-streaming（已合并 main）
+**PR**: [#1](https://github.com/T1t2nium/OmniSight/pull/1)（已合并 ✅）
+**Commits**: 7 (8e19ce2 feat → d382d25 merge)
+**文件变更**: 32 files (+6466 / -35)
 
 ## 完成事项
 - [x] 后端：Pydantic 消息模型（schemas.py）— WSMessage 信封 + 6 种 payload
