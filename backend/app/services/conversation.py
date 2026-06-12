@@ -67,6 +67,9 @@ class ConversationOrchestrator:
                 np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             )
 
+            # Debug: save raw audio to disk for quality inspection
+            _dump_debug_audio(pcm_bytes)
+
             # ---- Step 3: Transcribe ----
             text, language, duration = await self._transcriber.transcribe(audio_array)
             if not text:
@@ -115,3 +118,25 @@ class ConversationOrchestrator:
             raise AIPipelineError(str(exc)) from exc
         finally:
             await status_fn("idle")
+
+
+def _dump_debug_audio(pcm_bytes: bytes) -> None:
+    """Save raw PCM16 audio to a debug WAV file for quality inspection."""
+    import wave
+    import time
+    from pathlib import Path
+
+    debug_dir = Path("debug_audio")
+    debug_dir.mkdir(exist_ok=True)
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    path = debug_dir / f"utterance_{timestamp}.wav"
+
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit = 2 bytes
+        wf.setframerate(16000)
+        wf.writeframes(pcm_bytes)
+
+    logger.info("Debug audio saved: %s (%.1f KB)", path, len(pcm_bytes) / 1024)
+

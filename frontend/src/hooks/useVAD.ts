@@ -65,6 +65,13 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
             'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/',
           processorType: 'ScriptProcessor',
 
+          // VAD tuning for Chinese speech (shorter syllables, faster pace)
+          positiveSpeechThreshold: 0.5,
+          negativeSpeechThreshold: 0.35,
+          redemptionMs: 600,
+          preSpeechPadMs: 300,
+          minSpeechMs: 200,
+
           onSpeechStart: () => {
             if (cancelled) return;
             setIsSpeaking(true);
