@@ -65,6 +65,19 @@ export interface AIStatusPayload {
   status: 'listening' | 'thinking' | 'speaking' | 'idle';
 }
 
+// ---- PR 4: TTS Audio + Interrupt Payloads (Server → Client) ----
+
+export interface TTSAudioPayload {
+  data: string; // base64 PCM16 audio
+  sample_rate: number;
+  channels: number;
+  text: string; // The sentence being spoken
+}
+
+export interface InterruptPayload {
+  reason: string;
+}
+
 // ---- UI State Types ----
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
