@@ -113,6 +113,11 @@ async def _handle_audio_chunk(
 
     try:
         raw_wav = base64.b64decode(b64_data)
+
+        # DEBUG: save the full received WAV (with original header) to compare
+        # with frontend-side encoding. If this plays clean, base64 is correct.
+        _dump_raw_wav(raw_wav)
+
         pcm_data = raw_wav[44:] if len(raw_wav) > 44 else raw_wav
     except Exception:
         logger.exception("Failed to decode audio chunk for %s", session_id)
@@ -215,6 +220,26 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
             _running_tasks.pop(session_id, None)
 
     task.add_done_callback(_cleanup)
+
+
+# ---- Debug ----
+
+
+def _dump_raw_wav(raw_wav: bytes) -> None:
+    """Save the received WAV (with original header, before stripping) to disk.
+
+    Comparing this with the frontend's browser-side playback tells us
+    whether the base64 round-trip preserves the audio correctly.
+    """
+    import time
+    from pathlib import Path
+
+    debug_dir = Path("debug_audio")
+    debug_dir.mkdir(exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    path = debug_dir / f"received_{timestamp}.wav"
+    path.write_bytes(raw_wav)
+    logger.info("Debug received WAV saved: %s (%.1f KB)", path, len(raw_wav) / 1024)
 
 
 # ---- Helpers ----
