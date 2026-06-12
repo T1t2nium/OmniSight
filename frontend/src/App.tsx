@@ -9,7 +9,7 @@ import { useMediaStream } from './hooks/useMediaStream';
 import { useVAD } from './hooks/useVAD';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useFrameCapture } from './hooks/useFrameCapture';
-import type { WSMessage } from './types';
+import type { WSMessage, LLMResponsePayload } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
 const MUTED_ECHO_TYPES = new Set(['video_frame']);
@@ -20,18 +20,18 @@ function App() {
   const [totalFrames, setTotalFrames] = useState(0);
   const [totalAudioMs, setTotalAudioMs] = useState(0);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const llmBufferRef = useRef<string>('');
 
   const media = useMediaStream();
   const ws = useWebSocket(sessionIdRef.current);
+  const audioPlayer = useAudioPlayer();
   const vad = useVAD({
     stream: media.stream,
     sessionId: sessionIdRef.current,
     sendMessage: ws.send,
     enabled: conversationActive && media.micEnabled,
   });
-  void useAudioPlayer(); // Placeholder — PR 3 implements actual playback
 
-  // Periodic video frame capture (4 FPS JPEG via WebSocket)
   useFrameCapture({
     stream: media.stream,
     sessionId: sessionIdRef.current,
@@ -39,7 +39,7 @@ function App() {
     enabled: conversationActive && media.cameraEnabled,
   });
 
-  // Process incoming messages: update stats, filter muted echoes from chat log
+  // Process incoming messages: update stats, handle AI pipeline messages
   useEffect(() => {
     const msg = ws.lastMessage;
     if (!msg) return;
@@ -49,15 +49,62 @@ function App() {
       const p = msg.payload as Record<string, unknown>;
       if (typeof p.total_frames === 'number') setTotalFrames(p.total_frames);
       if (typeof p.total_audio_ms === 'number') setTotalAudioMs(p.total_audio_ms);
-
-      // Skip high-frequency echoes that would spam the log
-      if (typeof p.received_type === 'string' && MUTED_ECHO_TYPES.has(p.received_type)) {
-        return;
+      if (
+        typeof p.received_type === 'string' &&
+        MUTED_ECHO_TYPES.has(p.received_type)
+      ) {
+        return; // Skip high-frequency echoes
       }
     }
 
+    // Handle streaming LLM response
+    if (msg.type === 'llm_response') {
+      const p = msg.payload as unknown as LLMResponsePayload;
+      if (!p.done) {
+        // Accumulate deltas
+        llmBufferRef.current += p.delta;
+        // Replace or append streaming message in chat
+        setChatMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (
+            last &&
+            last.type === 'llm_response' &&
+            (last.payload as unknown as LLMResponsePayload).done === false
+          ) {
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...last,
+                payload: { delta: llmBufferRef.current, done: false, total_duration: 0 },
+              },
+            ];
+          }
+          return [...prev, msg];
+        });
+        return;
+      }
+      // Final chunk — speak and append final message
+      audioPlayer.playAudio(llmBufferRef.current);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          type: 'llm_response',
+          session_id: msg.session_id,
+          timestamp: msg.timestamp,
+          payload: {
+            delta: llmBufferRef.current,
+            done: true,
+            total_duration: p.total_duration,
+          },
+        },
+      ]);
+      llmBufferRef.current = '';
+      return;
+    }
+
+    // Generic append for all other message types
     setChatMessages((prev) => [...prev, msg]);
-  }, [ws.lastMessage]);
+  }, [ws.lastMessage, audioPlayer]);
 
   const handleStartConversation = useCallback(async () => {
     await media.startMedia();
@@ -66,11 +113,13 @@ function App() {
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
+    audioPlayer.stopPlayback();
     setConversationActive(false);
     setChatMessages([]);
     setTotalFrames(0);
     setTotalAudioMs(0);
-  }, [media]);
+    llmBufferRef.current = '';
+  }, [media, audioPlayer]);
 
   return (
     <div className="app">

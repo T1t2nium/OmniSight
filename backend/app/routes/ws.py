@@ -1,12 +1,20 @@
-"""WebSocket /ws endpoint — core media streaming handler.
+"""WebSocket /ws endpoint — media streaming + AI pipeline trigger.
 
 Receives audio_chunk, video_frame, and vad_event messages from the browser.
-Echoes statistics back so the frontend can verify the pipeline is working.
+On speech_end, triggers the full AI pipeline (transcriber → Ollama → response).
+
+PR 3 additions:
+- Video frames are stored in SessionState.latest_frame (for vision queries).
+- vad_event(speech_end) launches AI pipeline as a background task.
+- New server→client message types: transcript, llm_response, ai_status.
+- Background tasks are tracked per-session and cancelled on disconnect.
 """
 
+import asyncio
 import json
 import base64
 import logging
+from typing import Callable, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.models.schemas import (
@@ -14,17 +22,22 @@ from app.models.schemas import (
     ServerStatusPayload,
     EchoPayload,
     ErrorPayload,
+    AIStatusPayload,
 )
 from app.models.state import ConnectionStateManager
 from app.services.audio import AudioBufferManager
+from app.services.conversation import ConversationOrchestrator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Shared service instances — lives for the application lifetime
+# Shared service instances
 state_manager = ConnectionStateManager()
 audio_manager = AudioBufferManager()
+
+# Map of session_id → running AI task (for cancellation on disconnect or new utterance)
+_running_tasks: dict[str, asyncio.Task] = {}
 
 
 @router.websocket("/ws")
@@ -38,21 +51,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             raw = await websocket.receive_text()
             data = json.loads(raw)
 
-            # Extract session_id (client sends it with every message)
             msg_session = data.get("session_id")
             if not msg_session:
                 await _send_error(websocket, session_id, "Missing session_id")
                 continue
 
             if session_id is None:
-                # First message — register the session
                 session_id = msg_session
                 await state_manager.register(session_id)
-                await _send_status(websocket, session_id, "connected",
-                                   f"Session {session_id} registered")
+                await _send_status(
+                    websocket, session_id, "connected",
+                    f"Session {session_id} registered",
+                )
                 logger.info("Session registered: %s", session_id)
             elif msg_session != session_id:
-                # Safety: ignore messages that don't match the registered session
                 continue
 
             await state_manager.update_activity(session_id)
@@ -76,6 +88,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         logger.exception("WS error for session %s", session_id)
     finally:
         if session_id:
+            # Cancel any running AI pipeline
+            task = _running_tasks.pop(session_id, None)
+            if task and not task.done():
+                task.cancel()
+                logger.info("Cancelled AI pipeline for %s", session_id)
             await state_manager.remove(session_id)
             audio_manager.clear(session_id)
             logger.info("Session cleaned up: %s", session_id)
@@ -96,7 +113,6 @@ async def _handle_audio_chunk(
 
     try:
         raw_wav = base64.b64decode(b64_data)
-        # Strip 44-byte WAV header to get pure PCM16 samples
         pcm_data = raw_wav[44:] if len(raw_wav) > 44 else raw_wav
     except Exception:
         logger.exception("Failed to decode audio chunk for %s", session_id)
@@ -118,7 +134,11 @@ async def _handle_audio_chunk(
 async def _handle_video_frame(
     ws: WebSocket, session_id: str, payload: dict
 ) -> None:
-    """Count the frame and echo statistics back."""
+    """Store the latest base64 JPEG frame for vision queries, then echo stats."""
+    b64_data = payload.get("data", "")
+    if b64_data:
+        await state_manager.set_latest_frame(session_id, b64_data)
+
     frame_count = await state_manager.increment_frames(session_id)
     session_state = await state_manager.get(session_id)
 
@@ -133,12 +153,68 @@ async def _handle_video_frame(
 async def _handle_vad_event(
     ws: WebSocket, session_id: str, payload: dict
 ) -> None:
-    """Log VAD events and echo them back."""
+    """Handle VAD events. On speech_end, launch the AI pipeline."""
     event = payload.get("event", "unknown")
     logger.info("VAD %s [%s]", event, session_id)
 
+    if event == "speech_end":
+        await _start_ai_pipeline(ws, session_id)
+
     echo = EchoPayload(received_type=f"vad_event:{event}")
     await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
+# ---- AI Pipeline ----
+
+
+async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
+    """Retrieve audio + frame, then launch transcribe → Ollama in background."""
+    # Cancel any previous task for this session
+    existing = _running_tasks.get(session_id)
+    if existing and not existing.done():
+        existing.cancel()
+        logger.info("Cancelled previous AI pipeline for %s", session_id)
+
+    # Flush audio buffer
+    pcm_bytes, duration_ms = audio_manager.flush(session_id)
+    if not pcm_bytes or len(pcm_bytes) < 320:
+        logger.info(
+            "Skipping AI pipeline for %s — audio too short (%d bytes, %.0f ms)",
+            session_id, len(pcm_bytes), duration_ms,
+        )
+        return
+
+    # Get latest frame
+    latest_frame, _ = await state_manager.get_latest_frame(session_id)
+
+    # Get orchestrator from app state
+    orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
+
+    # Build send callbacks that close over the WebSocket
+    async def send_msg(msg_type: str, payload: dict) -> None:
+        await _send_message(ws, session_id, msg_type, payload)
+
+    async def send_status(status: str) -> None:
+        p = AIStatusPayload(status=status)
+        await _send_message(ws, session_id, "ai_status", p.model_dump())
+
+    task = asyncio.create_task(
+        orchestrator.process_utterance(
+            pcm_bytes=pcm_bytes,
+            sample_rate=16000,
+            latest_frame_b64=latest_frame,
+            history=None,  # PR 5 adds multi-turn history
+            send_fn=send_msg,
+            status_fn=send_status,
+        )
+    )
+    _running_tasks[session_id] = task
+
+    def _cleanup(t: asyncio.Task) -> None:
+        if _running_tasks.get(session_id) is t:
+            _running_tasks.pop(session_id, None)
+
+    task.add_done_callback(_cleanup)
 
 
 # ---- Helpers ----

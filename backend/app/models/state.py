@@ -15,6 +15,11 @@ class SessionState:
     audio_chunk_count: int = 0
     audio_duration_ms: float = 0.0
     last_activity: float = field(default_factory=time.time)
+    # PR 3: vision frame storage
+    latest_frame: str | None = None  # base64 JPEG, overwritten each video_frame
+    latest_frame_timestamp: float = 0.0
+    # PR 3: AI pipeline state
+    ai_status: str = "idle"  # idle | listening | thinking | speaking
 
 
 class ConnectionStateManager:
@@ -74,3 +79,28 @@ class ConnectionStateManager:
         """Return active session IDs (used for monitoring)."""
         async with self._lock:
             return list(self._sessions.keys())
+
+    # ---- PR 3: vision frame + AI status ----
+
+    async def set_latest_frame(self, session_id: str, frame_b64: str) -> None:
+        """Store the latest base64 JPEG frame for vision queries."""
+        async with self._lock:
+            state = self._sessions.get(session_id)
+            if state:
+                state.latest_frame = frame_b64
+                state.latest_frame_timestamp = time.time()
+
+    async def get_latest_frame(self, session_id: str) -> tuple[str | None, float]:
+        """Retrieve the latest frame (base64) and its timestamp."""
+        async with self._lock:
+            state = self._sessions.get(session_id)
+            if state:
+                return state.latest_frame, state.latest_frame_timestamp
+            return None, 0.0
+
+    async def set_ai_status(self, session_id: str, status: str) -> None:
+        """Update the AI processing status."""
+        async with self._lock:
+            state = self._sessions.get(session_id)
+            if state:
+                state.ai_status = status

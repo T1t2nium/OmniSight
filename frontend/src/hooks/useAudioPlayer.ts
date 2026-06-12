@@ -1,24 +1,42 @@
 /**
- * Audio playback hook — placeholder for PR 2.
+ * Audio playback hook — uses browser SpeechSynthesis API for TTS.
  *
- * PR 3 will add actual PCM16 decode + AudioBufferSourceNode queue playback.
- * PR 4 will add barge-in / interrupt support.
+ * PR 4 will upgrade to PCM16 audio queue playback via Web Audio API.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 export interface UseAudioPlayerReturn {
-  playAudio: (base64Wav: string) => Promise<void>;
+  playAudio: (text: string) => Promise<void>;
   stopPlayback: () => void;
 }
 
 export function useAudioPlayer(): UseAudioPlayerReturn {
-  const playAudio = useCallback(async (_base64Wav: string) => {
-    // Placeholder: PR 3 will decode base64 → AudioBuffer → play via Web Audio API
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const playAudio = useCallback(async (text: string) => {
+    if (!text) return;
+
+    // Cancel any previous utterance
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    // Try to find a Chinese voice if the system has one
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find((v) => v.lang.startsWith('zh'));
+    if (zhVoice) utterance.voice = zhVoice;
+
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   const stopPlayback = useCallback(() => {
-    // Placeholder: PR 4 will stop current playback and clear the queue
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
   }, []);
 
   return { playAudio, stopPlayback };
