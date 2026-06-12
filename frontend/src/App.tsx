@@ -87,25 +87,26 @@ function App() {
         });
         return;
       }
-      // Final chunk — speak, remove ALL previous llm_response messages,
-      // append the final accumulated result.
-      // Guard: Ollama may emit extra done=true lines with empty content.
+      // Final chunk — update the existing streaming message in-place to
+      // done=true with accumulated text + duration. Avoids deleting-all-
+      // and-recreating which can lose text on rapid Ollama extra lines.
       if (!llmBufferRef.current) return;
       playAudio(llmBufferRef.current);
-      setChatMessages((prev) => [
-        ...prev.filter((m) => m.type !== 'llm_response'),
-        {
-          type: 'llm_response',
-          session_id: msg.session_id,
-          timestamp: msg.timestamp,
-          payload: {
-            delta: llmBufferRef.current,
-            done: true,
-            total_duration: p.total_duration,
-          },
-        },
-      ]);
+      const finalText = llmBufferRef.current;
+      const finalDuration = p.total_duration;
       llmBufferRef.current = '';
+      setChatMessages((prev) => {
+        // Find the last streaming message and mark it done in-place
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].type === 'llm_response' && (prev[i].payload as unknown as LLMResponsePayload).done === false) {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], payload: { delta: finalText, done: true, total_duration: finalDuration } };
+            return updated;
+          }
+        }
+        // No streaming message found — append a new final one
+        return [...prev, { type: 'llm_response', session_id: msg.session_id, timestamp: msg.timestamp, payload: { delta: finalText, done: true, total_duration: finalDuration } }];
+      });
       return;
     }
 
