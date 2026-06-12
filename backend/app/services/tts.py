@@ -131,12 +131,42 @@ class PiperTTS:
         except (json.JSONDecodeError, KeyError) as exc:
             logger.warning("Could not parse Piper config %s: %s", self._config_path, exc)
 
+        # Verify executable actually runs (DLLs present, etc.)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self._executable, "--help",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", errors="replace").strip()
+                raise PiperTTSError(
+                    f"Piper executable failed to start (exit {proc.returncode}): {err}"
+                )
+        except asyncio.CancelledError:
+            raise
+        except PiperTTSError:
+            raise
+        except FileNotFoundError:
+            raise PiperTTSError(
+                f"Piper executable not found at '{self._executable}'."
+            )
+        except OSError as exc:
+            raise PiperTTSError(
+                f"Piper executable failed to launch (OS error): {exc}\n"
+                "This usually means a required DLL is missing. "
+                "Make sure piper.exe is in the same directory as its DLLs "
+                "(onnxruntime.dll, piper_phonemize.dll, etc.)."
+            )
+
         # Quick smoke test with a tiny synthesis
         try:
             await self.synthesize(".")
         except PiperTTSError:
             raise
         except Exception as exc:
+            logger.exception("Piper smoke test failed")
             raise PiperTTSError(
                 f"Piper smoke test failed: {exc}"
             ) from exc
@@ -199,8 +229,15 @@ class PiperTTS:
                 f"Piper executable not found at '{self._executable}'. "
                 "Is Piper installed and PIPER_EXECUTABLE set correctly?"
             )
+        except OSError as exc:
+            raise PiperTTSError(
+                f"Piper failed to start (OS error {exc.errno}): {exc}\n"
+                f"Command: {' '.join(cmd)}\n"
+                "This usually means a required DLL is missing from the piper directory."
+            )
         except Exception as exc:
-            raise PiperTTSError(f"Piper synthesis failed: {exc}") from exc
+            logger.exception("Piper synthesis raised unexpected exception")
+            raise PiperTTSError(f"Piper synthesis failed: {type(exc).__name__}: {exc}") from exc
 
 
 # ---- Helpers ----
