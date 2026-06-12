@@ -1,7 +1,13 @@
 """OmniSight Backend - AI Visual Conversation Assistant."""
 
+import sys
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+
+# Windows requires ProactorEventLoop for asyncio subprocess support
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
