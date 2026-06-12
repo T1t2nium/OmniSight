@@ -85,6 +85,7 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
             const base64 = arrayBufferToBase64(wavBuffer);
             const durationMs = (audio.length / 16000) * 1000;
 
+            // Send audio FIRST so it''s in the buffer when speech_end triggers pipeline
             sendMessage({
               type: 'audio_chunk',
               session_id: sessionId,
@@ -95,6 +96,14 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
                 channels: 1,
                 duration_ms: Math.round(durationMs * 10) / 10,
               },
+            });
+
+            // Then signal speech end — backend triggers AI pipeline on this
+            sendMessage({
+              type: 'vad_event',
+              session_id: sessionId,
+              timestamp: Date.now() / 1000,
+              payload: { event: 'speech_end' },
             });
           },
 
