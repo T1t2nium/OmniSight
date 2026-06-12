@@ -53,9 +53,14 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
           getStream: () => Promise.resolve(stream),
           startOnLoad: true,
           model: 'v5',
-          // Self-hosted assets in public/ (served at / by Vite dev server)
-          baseAssetPath: '/',
-          onnxWASMBasePath: '/',
+          // CDN paths for dev — ONNX runtime needs dynamic import() of .mjs
+          // which doesn't work from Vite's public/ (static asset dir).
+          // For production self-hosting, serve these via a reverse proxy or
+          // configure Vite's build.rollupOptions to handle .wasm/.mjs assets.
+          onnxWASMBasePath:
+            'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/',
+          baseAssetPath:
+            'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.29/dist/',
           processorType: 'ScriptProcessor',
 
           onSpeechStart: () => {
