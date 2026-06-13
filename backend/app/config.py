@@ -45,13 +45,19 @@ class Settings(BaseSettings):
     vision_enabled: bool = True  # Set to False for text-only mode (faster on CPU)
 
     # TTS
-    tts_backend: Literal["browser", "piper"] = "piper"
+    tts_backend: Literal["browser", "piper", "sherpa"] = "sherpa"
 
-    # Piper TTS (local ONNX-based TTS engine)
+    # Piper TTS (local ONNX-based TTS engine — fallback option)
     piper_executable: str = "piper"  # Path to piper executable (or "piper" if on PATH)
     piper_model: str = ""  # Path to .onnx voice model file
     piper_model_config: str = ""  # Path to .onnx.json config file (auto-derived if empty)
     piper_speaker: int | None = None  # Speaker ID for multi-speaker voices
+
+    # sherpa-onnx TTS (local ONNX-based TTS engine — default, best Chinese quality)
+    # Uses matcha-icefall-zh-baker model with built-in Chinese FST+lexicon text processing
+    sherpa_model_dir: str = ""  # Path to extracted model archive directory
+    sherpa_speed: float = 1.0  # Speech speed (0.5–2.0)
+    sherpa_num_threads: int = 4  # ONNX Runtime CPU threads
 
     # ---- PR 5: Robustness settings ----
 
@@ -63,6 +69,14 @@ class Settings(BaseSettings):
     # Motion detection
     motion_detection_enabled: bool = True
     motion_threshold: float = 15.0  # mean pixel diff threshold (0-255)
+
+    @field_validator("tts_backend", mode="before")
+    @classmethod
+    def _migrate_kokoro_to_sherpa(cls, v: object) -> str:
+        """Transparently migrate 'kokoro' → 'sherpa' for existing .env files."""
+        if v == "kokoro":
+            return "sherpa"
+        return str(v)
 
     @field_validator("piper_speaker", mode="before")
     @classmethod

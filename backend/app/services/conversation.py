@@ -18,6 +18,7 @@ import numpy as np
 from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.tts import PiperTTS, split_sentences
+from app.services.sherpa_tts import SherpaTTS
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ConversationOrchestrator:
         self,
         transcriber: AudioTranscriber,
         ollama: OllamaClient,
-        tts: PiperTTS | None = None,
+        tts: PiperTTS | SherpaTTS | None = None,
     ) -> None:
         self._transcriber = transcriber
         self._ollama = ollama
@@ -56,8 +57,12 @@ class ConversationOrchestrator:
 
     @property
     def tts_provider(self) -> str:
-        """Return 'piper' or 'browser' so the frontend knows what to expect."""
-        return "piper" if (self._tts and self._tts.ready) else "browser"
+        """Return 'sherpa', 'piper', or 'browser' so the frontend knows what to expect."""
+        if self._tts and self._tts.ready:
+            if isinstance(self._tts, SherpaTTS):
+                return "sherpa"
+            return "piper"
+        return "browser"
 
     async def process_utterance(
         self,
@@ -220,19 +225,33 @@ class ConversationOrchestrator:
     async def _synthesize_and_send(
         self, text: str, send_fn: Callable[[str, dict], Awaitable[None]],
     ) -> None:
-        """Synthesize a sentence via Piper TTS and send as tts_audio."""
+        """Synthesize a sentence via TTS, normalize volume, and send as tts_audio."""
         if not self._tts or not text.strip():
             return
 
-        # Strip Markdown formatting — Piper reads *, **, -, etc. as literal text.
+        # Strip Markdown and non-speakable characters
         clean_text = _clean_for_tts(text)
         if not clean_text.strip():
             return
+
+        # Log stripped characters for OOV diagnosis
+        stripped = set(text) - set(clean_text) - {' ', '\n', '\r', '\t'}
+        if stripped:
+            logger.debug(
+                "TTS cleaned: %d chars stripped: %r",
+                len(text) - len(clean_text),
+                ''.join(sorted(stripped))[:80],
+            )
+        else:
+            logger.debug("TTS text (clean): %r", text[:100])
 
         try:
             pcm_bytes, sr = await self._tts.synthesize(clean_text)
             if not pcm_bytes:
                 return
+
+            # Normalize PCM16 peak level to avoid volume fluctuations
+            pcm_bytes = _normalize_pcm16(pcm_bytes)
 
             pcm_b64 = base64.b64encode(pcm_bytes).decode("ascii")
             await send_fn("tts_audio", {
@@ -266,6 +285,9 @@ _TTS_REPLACEMENTS: list[tuple[re.Pattern, str]] = [
     # HTML/markdown remnants
     (re.compile(r"<[^>]+>"), ""),   # <tag>
     (re.compile(r"`{1,3}[^`]*`{1,3}"), ""),  # `code` or ```block```
+    # Strip unwanted characters before they reach the TTS engine
+    (re.compile(r"："), ""),    # fullwidth colon — not pronounceable
+    (re.compile(r"[-—–]"), ""),  # dashes (hyphen, em-dash, en-dash)
     # Multiple spaces → single space
     (re.compile(r" {2,}"), " "),
     # Repeated punctuation cleanup
@@ -274,15 +296,90 @@ _TTS_REPLACEMENTS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"？{2,}"), "？"),
 ]
 
+# Unicode ranges to KEEP in TTS text (everything else is stripped)
+_TTS_ALLOWED_BLOCKS = [
+    (0x4E00, 0x9FFF),   # CJK Unified Ideographs (Chinese)
+    (0x3400, 0x4DBF),   # CJK Extension A
+    (0x2000, 0x206F),   # General Punctuation
+    (0x3000, 0x303F),   # CJK Symbols/Punctuation
+    (0xFF00, 0xFFEF),   # Halfwidth/Fullwidth Forms
+    (0x0000, 0x007F),   # Basic Latin (ASCII)
+    (0x0080, 0x00FF),   # Latin-1 Supplement
+    (0x0100, 0x024F),   # Latin Extended
+    (0xFE30, 0xFE4F),   # CJK Compatibility Forms
+    (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
+]
+
 
 def _clean_for_tts(text: str) -> str:
-    """Remove Markdown formatting that Piper would read aloud as literal characters.
+    """Remove formatting and non-speakable characters from TTS text.
 
-    Strips bold/italic markers, list bullets, code fences, HTML tags, and
-    collapses repeated punctuation that sounds jarring when spoken.
+    Strips Markdown, HTML, emoji, control chars, and rare Unicode that
+    the TTS lexicon cannot pronounce (causing OOV warnings).
     """
     result = text
     for pattern, replacement in _TTS_REPLACEMENTS:
         result = pattern.sub(replacement, result)
-    # Strip whitespace around sentence boundaries after cleanup
+
+    # Filter to only characters the TTS engine can pronounce:
+    # CJK Unified Ideographs (common Chinese), ASCII letters/numbers,
+    # Chinese/English punctuation, and whitespace.
+    cleaned_chars: list[str] = []
+    for ch in result:
+        cp = ord(ch)
+        # Whitespace → space
+        if ch in (' ', '\n', '\r', '\t', '　'):
+            cleaned_chars.append(' ')
+            continue
+        # ASCII printable (letters, digits, basic punctuation)
+        if 0x20 <= cp <= 0x7E:
+            cleaned_chars.append(ch)
+            continue
+        # CJK Unified Ideographs — only the main block (common Chinese)
+        if 0x4E00 <= cp <= 0x9FFF:
+            cleaned_chars.append(ch)
+            continue
+        # CJK punctuation (。、，！？：；""''）
+        if 0x3000 <= cp <= 0x303F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth punctuation and Latin (！＂＃＄％)
+        if 0xFF00 <= cp <= 0xFF0F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth digits and uppercase (０１２３ＡＢＣ)
+        if 0xFF10 <= cp <= 0xFF3F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth lowercase (ａｂｃ)
+        if 0xFF41 <= cp <= 0xFF5E:
+            cleaned_chars.append(ch)
+            continue
+        # Everything else: emoji, symbols, rare CJK, control chars → dropped
+
+    result = ''.join(cleaned_chars)
+    # Collapse whitespace
+    result = re.sub(r'\s+', ' ', result)
     return result.strip()
+
+# Remove the Unicode block list since we inline the logic above
+_TTS_ALLOWED_BLOCKS = []  # kept for backward compat, unused
+
+
+def _normalize_pcm16(pcm_bytes: bytes, target_peak: float = 0.85) -> bytes:
+    """Peak-normalize PCM16 audio to smooth inter-sentence volume.
+
+    Args:
+        pcm_bytes: Raw PCM16 (int16 little-endian) audio data.
+        target_peak: Target peak level (0.0–1.0, default 0.85).
+
+    Returns:
+        Normalized PCM16 bytes at the target peak level.
+    """
+    samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+    peak = float(np.max(np.abs(samples)))
+    if peak < 100:  # silence or near-silence — don't amplify noise
+        return pcm_bytes
+    gain = target_peak * 32767.0 / peak
+    normalized = np.clip(samples * gain, -32767, 32767).astype(np.int16)
+    return normalized.tobytes()

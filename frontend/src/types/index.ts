@@ -68,7 +68,7 @@ export interface AIStatusPayload {
 // ---- PR 4: TTS Audio + Interrupt Payloads (Server → Client) ----
 
 export interface TTSInfoPayload {
-  provider: 'piper' | 'browser';
+  provider: 'sherpa' | 'piper' | 'browser';
 }
 
 export interface TTSAudioPayload {

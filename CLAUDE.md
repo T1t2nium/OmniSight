@@ -28,6 +28,8 @@
 - **后端入口**：[backend/app/main.py](backend/app/main.py) — FastAPI 应用
 - **WebSocket 处理**：[backend/app/routes/ws.py](backend/app/routes/ws.py) — 核心通信枢纽
 - **AI 集成**：[backend/app/services/ollama_client.py](backend/app/services/ollama_client.py) — Ollama 模型调用
+- **TTS 引擎**：[backend/app/services/sherpa_tts.py](backend/app/services/sherpa_tts.py) — sherpa-onnx (默认)
+- **TTS 后备**：[backend/app/services/tts.py](backend/app/services/tts.py) — Piper TTS (后备)
 - **前端入口**：[frontend/src/main.tsx](frontend/src/main.tsx) — React 应用
 - **前端组件**：[frontend/src/App.tsx](frontend/src/App.tsx) — 根组件
 - **设计 Token**：[frontend/src/styles/tokens.css](frontend/src/styles/tokens.css) — CSS 变量体系
