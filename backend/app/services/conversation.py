@@ -8,6 +8,7 @@ the backend synthesizes PCM16 audio per-sentence and sends it via WebSocket.
 import asyncio
 import base64
 import logging
+import re
 from typing import Awaitable, Callable
 
 import numpy as np
@@ -196,8 +197,13 @@ class ConversationOrchestrator:
         if not self._tts or not text.strip():
             return
 
+        # Strip Markdown formatting — Piper reads *, **, -, etc. as literal text.
+        clean_text = _clean_for_tts(text)
+        if not clean_text.strip():
+            return
+
         try:
-            pcm_bytes, sr = await self._tts.synthesize(text)
+            pcm_bytes, sr = await self._tts.synthesize(clean_text)
             if not pcm_bytes:
                 return
 
@@ -206,10 +212,50 @@ class ConversationOrchestrator:
                 "data": pcm_b64,
                 "sample_rate": sr,
                 "channels": 1,
-                "text": text,
+                "text": clean_text,
             })
-            logger.debug("TTS sent: %r (%d bytes, %d Hz)", text[:60], len(pcm_bytes), sr)
+            logger.debug("TTS sent: %r (%d bytes, %d Hz)", clean_text[:60], len(pcm_bytes), sr)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("TTS synthesis failed for %r: %s", text[:80], exc)
+            logger.error("TTS synthesis failed for %r: %s", clean_text[:80], exc)
+
+
+# ---- TTS text clean-up ----
+
+# Markdown / formatting characters that Piper reads as literal text.
+_TTS_REPLACEMENTS: list[tuple[re.Pattern, str]] = [
+    # Bold / italic markers
+    (re.compile(r"\*\*(.+?)\*\*"), r"\1"),   # **bold** → bold
+    (re.compile(r"\*(.+?)\*"),     r"\1"),   # *italic* → italic
+    (re.compile(r"__(.+?)__"),     r"\1"),   # __bold__ → bold
+    # List markers
+    (re.compile(r"^\s*[-*+]\s+", re.MULTILINE), ""),   # - item → item
+    (re.compile(r"^\s*\d+[.)]\s*", re.MULTILINE), ""), # 1. item → item
+    # Standalone formatting chars (run after removing paired ones)
+    (re.compile(r"\*+"), ""),   # leftover *** or *
+    (re.compile(r"_{2,}"), ""), # leftover ___
+    (re.compile(r"~{2,}"), ""), # ~~strikethrough~~
+    # HTML/markdown remnants
+    (re.compile(r"<[^>]+>"), ""),   # <tag>
+    (re.compile(r"`{1,3}[^`]*`{1,3}"), ""),  # `code` or ```block```
+    # Multiple spaces → single space
+    (re.compile(r" {2,}"), " "),
+    # Repeated punctuation cleanup
+    (re.compile(r"\.{3,}"), "…"),  # …… → …
+    (re.compile(r"！{2,}"), "！"),
+    (re.compile(r"？{2,}"), "？"),
+]
+
+
+def _clean_for_tts(text: str) -> str:
+    """Remove Markdown formatting that Piper would read aloud as literal characters.
+
+    Strips bold/italic markers, list bullets, code fences, HTML tags, and
+    collapses repeated punctuation that sounds jarring when spoken.
+    """
+    result = text
+    for pattern, replacement in _TTS_REPLACEMENTS:
+        result = pattern.sub(replacement, result)
+    # Strip whitespace around sentence boundaries after cleanup
+    return result.strip()
