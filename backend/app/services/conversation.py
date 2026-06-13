@@ -109,47 +109,70 @@ class ConversationOrchestrator:
             history = history or []
             history.append({"role": "user", "content": text})
 
-            # ---- Step 6: Stream Ollama response (NEVER block on TTS) ----
+            # ---- Step 6: Stream LLM + feed TTS queue ----
+            # Producer-consumer: LLM pushes complete sentences into a queue;
+            # a single TTS worker consumes them sequentially. This decouples
+            # LLM streaming from TTS synthesis — the worker starts on the
+            # first sentence while the LLM may still be generating later ones.
             await status_fn("speaking")
             full_response = ""
             tts_pending_text = ""
-            tts_sentences: list[str] = []
 
-            async for chunk in self._ollama.chat(
-                text, image_base64=latest_frame_b64, history=history
-            ):
-                full_response += chunk["delta"]
-                tts_pending_text += chunk["delta"]
+            tts_ready = self._tts and self._tts.ready
+            tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
+            worker_task: asyncio.Task | None = None
 
-                await send_fn("llm_response", {
-                    "delta": chunk["delta"],
-                    "done": chunk["done"],
-                    "total_duration": chunk.get("total_duration", 0.0),
-                })
+            async def _tts_worker() -> None:
+                """Consume sentences from queue, synthesize, send. Runs until sentinel."""
+                while True:
+                    sentence = await tts_queue.get()
+                    if sentence is None:
+                        tts_queue.task_done()
+                        return
+                    try:
+                        await self._synthesize_and_send(sentence, send_fn)
+                    finally:
+                        tts_queue.task_done()
 
-                # Detect sentence boundaries — collect, don't synthesize yet
-                if self._tts and self._tts.ready:
-                    sentences, tts_pending_text = split_sentences(tts_pending_text)
-                    tts_sentences.extend(sentences)
+            if tts_ready:
+                worker_task = asyncio.create_task(_tts_worker())
 
-            # ---- Step 7: Synthesize TTS concurrently ----
-            if tts_pending_text.strip():
-                tts_sentences.append(tts_pending_text.strip())
+            try:
+                async for chunk in self._ollama.chat(
+                    text, image_base64=latest_frame_b64, history=history
+                ):
+                    full_response += chunk["delta"]
+                    tts_pending_text += chunk["delta"]
 
-            if self._tts and self._tts.ready and tts_sentences:
-                # Launch all sentences as concurrent tasks.
-                # Piper subprocess calls are CPU-bound I/O (asyncio.to_thread),
-                # so parallel synthesis cuts total TTS time by ~3x for multi-sentence replies.
-                async def _synth(sentence: str) -> None:
-                    await self._synthesize_and_send(sentence, send_fn)
+                    await send_fn("llm_response", {
+                        "delta": chunk["delta"],
+                        "done": chunk["done"],
+                        "total_duration": chunk.get("total_duration", 0.0),
+                    })
 
-                tasks = [asyncio.create_task(_synth(s)) for s in tts_sentences]
-                try:
-                    await asyncio.gather(*tasks)
-                except asyncio.CancelledError:
-                    for t in tasks:
-                        t.cancel()
-                    raise
+                    # Push complete sentences to TTS worker (non-blocking)
+                    if tts_ready:
+                        sentences, tts_pending_text = split_sentences(tts_pending_text)
+                        for s in sentences:
+                            await tts_queue.put(s)
+
+                # ---- Step 7: Flush remaining text + wait for TTS ----
+                if tts_ready:
+                    if tts_pending_text.strip():
+                        await tts_queue.put(tts_pending_text.strip())
+                    await tts_queue.put(None)  # sentinel
+                    await tts_queue.join()     # wait until all sentences processed
+
+            finally:
+                # On cancellation or error, ensure worker stops
+                if worker_task and not worker_task.done():
+                    if tts_ready:
+                        await tts_queue.put(None)  # unblock worker
+                    worker_task.cancel()
+                    try:
+                        await worker_task
+                    except asyncio.CancelledError:
+                        pass
 
             # ---- Step 8: Store assistant response for next turn ----
             if full_response:
