@@ -213,9 +213,7 @@ body {
   flex-shrink: 0;
   min-height: 44px;
   backdrop-filter: blur(12px);
-  background: rgba(15, 15, 20, 0.8);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(15, 15, 20, 0.25);
 }
 
 .layout-chat {
@@ -228,8 +226,7 @@ body {
   flex-shrink: 0;
   padding: var(--space-3) var(--space-5);
   backdrop-filter: blur(12px);
-  background: rgba(15, 15, 20, 0.8);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(15, 15, 20, 0.25);
 }
 
 /* ===== Video Panel ===== */
