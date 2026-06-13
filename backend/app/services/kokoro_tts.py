@@ -40,10 +40,11 @@ DEFAULT_CHINESE_VOICE = "zf_xiaobei"   # v1.0 default (always available)
 DEFAULT_CHINESE_VOICE_V11 = "zf_001"   # v1.1-zh default (higher quality if available)
 
 # espeak-ng language codes used by kokoro-onnx for G2P
+# espeak-ng uses ISO 639-3 codes: "cmn" = Mandarin Chinese, "en-us" = English
 LANG_MAP = {
-    "zh": "zh",        # Mandarin Chinese
+    "zh": "cmn",       # Mandarin Chinese (espeak-ng ISO 639-3)
     "en": "en-us",     # American English
-    "auto": "zh",      # default to Chinese
+    "auto": "cmn",     # default to Chinese
 }
 
 
