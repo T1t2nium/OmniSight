@@ -275,8 +275,9 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <div className="app-logo" aria-hidden="true">◈</div>
         <h1>OmniSight</h1>
-        <span className="app-subtitle">AI Visual Conversation Assistant</span>
+        <span className="app-subtitle">AI Vision</span>
       </header>
 
       <main className="app-main">
