@@ -26,6 +26,8 @@ class SessionState:
     latest_frame_timestamp: float = 0.0
     # PR 3: AI pipeline state
     ai_status: str = "idle"  # idle | listening | thinking | speaking
+    # PR 8: multi-turn conversation history
+    history: list[dict] = field(default_factory=list)
 
 
 class ConnectionStateManager:

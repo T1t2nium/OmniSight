@@ -72,7 +72,7 @@ class ConversationOrchestrator:
         history: list[dict] | None,
         send_fn: Callable[[str, dict], Awaitable[None]],
         status_fn: Callable[[str], Awaitable[None]],
-    ) -> None:
+    ) -> list[dict]:
         """Run the full AI pipeline on a single user utterance.
 
         Steps:
@@ -83,6 +83,9 @@ class ConversationOrchestrator:
         5. Stream Ollama response as llm_response deltas, detect sentences
         6. Concurrent TTS synthesis for collected sentences
         7. Send 'idle' status on completion
+
+        Returns:
+            Updated conversation history for the next turn.
         """
         await status_fn("thinking")
 
@@ -105,6 +108,13 @@ class ConversationOrchestrator:
             logger.info(
                 "Transcript [%s] (%.1fs): %s", language, duration, text[:200]
             )
+
+            # Only send the image if the user's question is explicitly visual.
+            # This prevents the model from describing the scene for non-visual
+            # questions like "how are you" or "tell me a joke".
+            if latest_frame_b64 and not _is_visual_question(text):
+                logger.info("Non-visual question — skipping image for '%s'", text[:80])
+                latest_frame_b64 = None
 
             # ---- Step 4: Send transcript ----
             t0 = time.perf_counter()
@@ -221,6 +231,8 @@ class ConversationOrchestrator:
             # Task exception in logs. The error message above is sufficient.
         finally:
             await status_fn("idle")
+
+        return history
 
     async def _synthesize_and_send(
         self, text: str, send_fn: Callable[[str, dict], Awaitable[None]],
@@ -360,10 +372,63 @@ def _clean_for_tts(text: str) -> str:
     result = ''.join(cleaned_chars)
     # Collapse whitespace
     result = re.sub(r'\s+', ' ', result)
+    # Convert Arabic numerals to Chinese (prevents TTS mumbling on numbers)
+    result = _numbers_to_chinese(result)
     return result.strip()
 
 # Remove the Unicode block list since we inline the logic above
 _TTS_ALLOWED_BLOCKS = []  # kept for backward compat, unused
+
+
+# Chinese keywords that indicate the user wants visual analysis
+_VISUAL_KEYWORDS = re.compile(
+    r"我.{0,3}(看|穿|拿|戴|手|身上|旁边|后面|前面|周围|这边|那边|这里|那里)"
+    r"|什么.{0,3}(颜色|样|东西|玩意)"
+    r"|看看|看到|看清|看下|看一下|瞅|瞄"
+    r"|我的.{0,3}(脸|头发|衣服|眼镜|手表|项链|耳环)"
+    r"|这是|这是啥|这是什么|那是什么|那是啥"
+    r"|描述|形容|长什么样"
+)
+
+
+# Match standalone integers (not inside phone numbers, IDs, or codes)
+_NUM_PATTERN = re.compile(r"(?<!\d)(\d+)(?!\d)")
+
+
+def _numbers_to_chinese(text: str) -> str:
+    """Convert standalone Arabic numerals to Chinese for clearer TTS.
+
+    Only converts short numbers (<=5 digits). Long digit strings
+    like phone numbers or IDs are left as-is.
+    """
+    # Chinese digits
+    digits_cn = "零一二三四五六七八九"
+
+    def _replace(m: re.Match) -> str:
+        num_str = m.group(1)
+        if len(num_str) > 5:
+            # Skip long numbers (phone numbers, IDs, etc.)
+            return num_str
+        result = ""
+        for ch in num_str:
+            if ch.isdigit():
+                result += digits_cn[int(ch)]
+            else:
+                result += ch
+        return result
+
+    return _NUM_PATTERN.sub(_replace, text)
+
+
+def _is_visual_question(text: str) -> bool:
+    """Check if a user's question is explicitly visual (needs the camera frame).
+
+    Returns True only if the question contains visual keywords like
+    "我手上", "我穿什么", "这是什么", "看看", etc.
+    Non-visual questions like "你好", "讲个笑话", "你在干嘛" return False.
+    """
+    return bool(_VISUAL_KEYWORDS.search(text))
+
 
 
 def _normalize_pcm16(pcm_bytes: bytes, target_peak: float = 0.85) -> bytes:

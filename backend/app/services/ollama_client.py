@@ -43,7 +43,14 @@ class OllamaClient:
 
         Cancellation: the caller closes the stream or cancels the asyncio task.
         """
-        messages = list(history or [])
+        from app.services.prompts import SYSTEM_PROMPT
+
+        # Always prepend system prompt
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if history:
+            # Keep only the last 4 exchanges (8 messages) to prevent
+            # context drift where the model forgets the system prompt
+            messages.extend(history[-8:])
 
         # Build the user message — with or without image
         if image_base64:
