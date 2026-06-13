@@ -53,14 +53,14 @@ body {
   background:
     radial-gradient(
       ellipse 70% 60% at 50% 40%,
-      rgba(var(--ambiance-rgb), 0.18) 0%,
-      rgba(var(--ambiance-rgb), 0.08) 35%,
-      rgba(var(--ambiance-rgb), 0.02) 60%,
+      rgba(var(--ambiance-rgb), 0.28) 0%,
+      rgba(var(--ambiance-rgb), 0.14) 30%,
+      rgba(var(--ambiance-rgb), 0.05) 55%,
       transparent 100%
     );
   animation: breathe-orb 4s ease-in-out infinite;
   transition: background 1.2s ease;
-  filter: blur(40px);
+  filter: blur(30px);
 }
 
 /* Secondary scattered light — wider, more diffuse */
@@ -76,13 +76,13 @@ body {
   background:
     radial-gradient(
       ellipse 60% 50% at 50% 35%,
-      rgba(var(--ambiance-rgb), 0.06) 0%,
-      rgba(var(--ambiance-rgb), 0.02) 50%,
+      rgba(var(--ambiance-rgb), 0.12) 0%,
+      rgba(var(--ambiance-rgb), 0.05) 40%,
       transparent 100%
     );
   animation: breathe-orb-secondary 5s ease-in-out infinite;
   transition: background 1.2s ease;
-  filter: blur(60px);
+  filter: blur(50px);
 }
 
 /* Noise texture overlay — frosted glass grain */
@@ -121,7 +121,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .bg-ambiance::before,
-  .bg-ambiance::after {
+  .bg-ambiance::after,
+  .video-panel::before {
     animation: none;
   }
 }
@@ -243,6 +244,22 @@ body {
   position: relative;
 }
 
+/* Breathing glow ring around video panel — driven by --ambiance-rgb */
+.video-panel::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius-xl) + 2px);
+  box-shadow:
+    0 0 20px rgba(var(--ambiance-rgb), 0.35),
+    0 0 50px rgba(var(--ambiance-rgb), 0.18),
+    0 0 80px rgba(var(--ambiance-rgb), 0.08);
+  animation: breathe-border 3.5s ease-in-out infinite;
+  transition: box-shadow 1.2s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
 .video-panel::after {
   content: '';
   position: absolute;
@@ -250,6 +267,21 @@ body {
   border-radius: var(--radius-xl);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   pointer-events: none;
+}
+
+@keyframes breathe-border {
+  0%, 100% {
+    box-shadow:
+      0 0 18px rgba(var(--ambiance-rgb), 0.35),
+      0 0 45px rgba(var(--ambiance-rgb), 0.18),
+      0 0 75px rgba(var(--ambiance-rgb), 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(var(--ambiance-rgb), 0.5),
+      0 0 70px rgba(var(--ambiance-rgb), 0.28),
+      0 0 110px rgba(var(--ambiance-rgb), 0.14);
+  }
 }
 
 .video-preview {
