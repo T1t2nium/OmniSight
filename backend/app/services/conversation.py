@@ -372,6 +372,8 @@ def _clean_for_tts(text: str) -> str:
     result = ''.join(cleaned_chars)
     # Collapse whitespace
     result = re.sub(r'\s+', ' ', result)
+    # Convert Arabic numerals to Chinese (prevents TTS mumbling on numbers)
+    result = _numbers_to_chinese(result)
     return result.strip()
 
 # Remove the Unicode block list since we inline the logic above
@@ -387,6 +389,35 @@ _VISUAL_KEYWORDS = re.compile(
     r"|这是|这是啥|这是什么|那是什么|那是啥"
     r"|描述|形容|长什么样"
 )
+
+
+# Match standalone integers (not inside phone numbers, IDs, or codes)
+_NUM_PATTERN = re.compile(r"(?<!\d)(\d+)(?!\d)")
+
+
+def _numbers_to_chinese(text: str) -> str:
+    """Convert standalone Arabic numerals to Chinese for clearer TTS.
+
+    Only converts short numbers (<=5 digits). Long digit strings
+    like phone numbers or IDs are left as-is.
+    """
+    # Chinese digits
+    digits_cn = "零一二三四五六七八九"
+
+    def _replace(m: re.Match) -> str:
+        num_str = m.group(1)
+        if len(num_str) > 5:
+            # Skip long numbers (phone numbers, IDs, etc.)
+            return num_str
+        result = ""
+        for ch in num_str:
+            if ch.isdigit():
+                result += digits_cn[int(ch)]
+            else:
+                result += ch
+        return result
+
+    return _NUM_PATTERN.sub(_replace, text)
 
 
 def _is_visual_question(text: str) -> bool:
