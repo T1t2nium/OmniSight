@@ -1,42 +1,72 @@
 """Sherpa-onnx TTS service — local ONNX-based text-to-speech.
 
 Uses sherpa-onnx (https://github.com/k2-fsa/sherpa-onnx) with the
-matcha-icefall-zh-baker model. Chinese text processing is fully built-in
-(FST normalization + lexicon), no runtime espeak-ng dependency.
+vits-melo-tts-zh_en model by default. Chinese text processing is fully
+built-in (FST normalization + lexicon), no runtime espeak-ng dependency.
 
 This avoids the root cause of Chinese G2P quality issues in Piper and
 Kokoro — both of which rely on espeak-ng for runtime phonemization.
 
+Model auto-detection: if model.onnx exists → VITS; if model-steps-3.onnx
+exists → Matcha (requires separate vocoder download).
+
 Sentence streaming: the orchestrator detects sentence boundaries in the
 LLM output, calls synthesize() per sentence, and sends each PCM16 chunk
 to the frontend for playback via Web Audio API.
-
-Model: matcha-icefall-zh-baker (Apache 2.0, 73 MB, 22050 Hz).
 """
 
 import asyncio
 import logging
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# sherpa-onnx model archive for matcha-icefall-zh-baker
-# Download: scripts/download-sherpa-tts.ps1
-# Source: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
-REQUIRED_MODEL_FILES = [
-    "model-steps-3.onnx",      # acoustic model
-    "lexicon.txt",             # Chinese word→phoneme lexicon
-    "tokens.txt",              # token list
-]
-REQUIRED_MODEL_DIRS = [
-    "dict",                    # multi-word pronunciation dictionary
-]
 
-# Vocoder filename — looked up in model_dir first, then parent dir
-VOCODER_FILENAME = "vocos-22khz-univ.onnx"
+def _fix_onnxruntime_dll() -> None:
+    """Replace sherpa-onnx's bundled ORT 1.17 DLL with the system ORT >=1.20.
+
+    sherpa-onnx 1.13.x ships with onnxruntime 1.17.1, but recent models
+    require ORT 1.20+ (API version 24). We copy the system ORT DLL over
+    the bundled one so model loading doesn't segfault.
+    """
+    try:
+        import onnxruntime as ort
+        import sherpa_onnx as _s
+
+        ort_dll = Path(ort.__file__).parent / "capi" / "onnxruntime.dll"
+        bundled_dll = Path(_s.__file__).parent / "lib" / "onnxruntime.dll"
+
+        if not ort_dll.is_file() or not bundled_dll.is_file():
+            return
+
+        # Only replace if the system DLL is newer (different size)
+        if ort_dll.stat().st_size != bundled_dll.stat().st_size:
+            logger.info(
+                "Patching ORT DLL: %d MB → %d MB",
+                bundled_dll.stat().st_size // 1048576,
+                ort_dll.stat().st_size // 1048576,
+            )
+            # Backup original
+            bak = bundled_dll.with_suffix(".dll.bak")
+            if not bak.exists():
+                shutil.copy2(bundled_dll, bak)
+            shutil.copy2(ort_dll, bundled_dll)
+            logger.info("ORT DLL patched successfully")
+    except Exception:
+        logger.debug("ORT DLL patch skipped (non-critical)", exc_info=True)
+
+
+# Auto-fix ORT DLL on module import
+_fix_onnxruntime_dll()
+
+# Required files per model type
+VITS_REQUIRED_FILES = ["model.onnx", "lexicon.txt", "tokens.txt"]
+MATCHA_REQUIRED_FILES = ["model-steps-3.onnx", "lexicon.txt", "tokens.txt"]
+REQUIRED_MODEL_DIRS = ["dict"]
 
 
 class SherpaTTSError(Exception):
@@ -44,14 +74,17 @@ class SherpaTTSError(Exception):
 
 
 class SherpaTTS:
-    """Async wrapper around sherpa-onnx OfflineTts (matcha-icefall-zh-baker).
+    """Async wrapper around sherpa-onnx OfflineTts.
+
+    Auto-detects model type from the model directory:
+    - model.onnx → VITS (vits-melo-tts-zh_en, 44100 Hz, 163 MB)
+    - model-steps-3.onnx → Matcha (matcha-icefall-zh-baker, 22050 Hz, 73 MB)
 
     Uses sherpa-onnx Python API for direct ONNX inference. The model is
-    loaded in a thread pool during initialize() to avoid blocking the
-    event loop. Synthesis also runs in a thread pool.
+    loaded in a thread pool during initialize().
 
     Usage:
-        tts = SherpaTTS(model_dir="backend/models/sherpa-voices/matcha-icefall-zh-baker")
+        tts = SherpaTTS(model_dir="backend/models/sherpa-voices/vits-melo-tts-zh_en")
         await tts.initialize()
         pcm_bytes, sample_rate = await tts.synthesize("你好世界")
     """
@@ -59,42 +92,41 @@ class SherpaTTS:
     def __init__(
         self,
         model_dir: str = "",
+        vocoder_dir: str = "",
         speed: float = 1.0,
         num_threads: int = 4,
     ) -> None:
         """
         Args:
-            model_dir: Path to the extracted matcha-icefall-zh-baker model archive.
+            model_dir: Path to the model archive directory.
+            vocoder_dir: For Matcha models — directory containing vocos-22khz-univ.onnx.
             speed: Speech speed (0.5–2.0, default 1.0).
             num_threads: ONNX Runtime thread count for CPU inference.
         """
         self._model_dir = model_dir
+        self._vocoder_dir = vocoder_dir or str(
+            Path(model_dir).parent if model_dir else ""
+        )
         self._speed = speed
         self._num_threads = num_threads
-        self._tts = None  # sherpa_onnx.OfflineTts instance
+        self._tts = None
         self._ready = False
+        self._model_type = ""  # "vits" or "matcha"
+        self._sample_rate = 0  # set during initialize()
 
     # ---- public API ----
 
     @property
     def ready(self) -> bool:
-        """True if the model is loaded and ready for synthesis."""
         return self._ready
 
     @property
     def sample_rate(self) -> int:
-        """Native sample rate of matcha-icefall-zh-baker output (22050 Hz)."""
-        return 22050
+        return self._sample_rate
 
     async def initialize(self) -> None:
-        """Load the sherpa-onnx model and validate with a smoke test.
+        """Detect model type, load the sherpa-onnx model, smoke test."""
 
-        The model is loaded in a thread pool because ONNX Runtime's
-        session creation is synchronous.
-
-        Raises SherpaTTSError if model files are missing or invalid.
-        """
-        # Validate model directory and required files
         if not self._model_dir:
             raise SherpaTTSError(
                 "sherpa-onnx model directory not configured. "
@@ -106,31 +138,45 @@ class SherpaTTS:
             raise SherpaTTSError(
                 f"sherpa-onnx model directory not found: {self._model_dir}"
             )
-        for fname in REQUIRED_MODEL_FILES:
-            fpath = model_path / fname
-            if not fpath.is_file():
+
+        # Detect model type
+        if (model_path / "model.onnx").is_file():
+            self._model_type = "vits"
+            required = VITS_REQUIRED_FILES
+        elif (model_path / "model-steps-3.onnx").is_file():
+            self._model_type = "matcha"
+            required = MATCHA_REQUIRED_FILES
+        else:
+            raise SherpaTTSError(
+                f"No recognized model file found in {self._model_dir}. "
+                f"Expected model.onnx (VITS) or model-steps-3.onnx (Matcha)."
+            )
+
+        for fname in required:
+            if not (model_path / fname).is_file():
                 raise SherpaTTSError(
-                    f"Missing model file: {fpath}\n"
+                    f"Missing model file: {model_path / fname}\n"
                     f"Re-download from: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models"
                 )
         for dname in REQUIRED_MODEL_DIRS:
-            dpath = model_path / dname
-            if not dpath.is_dir():
-                logger.warning("Optional model directory missing: %s", dpath)
+            if not (model_path / dname).is_dir():
+                logger.warning("Optional model directory missing: %s", model_path / dname)
 
-        # Vocoder: try model dir first, then parent dir
-        vocoder_path = model_path / VOCODER_FILENAME
-        if not vocoder_path.is_file():
-            vocoder_path = model_path.parent / VOCODER_FILENAME
-        if not vocoder_path.is_file():
-            raise SherpaTTSError(
-                f"Vocoder not found. Download {VOCODER_FILENAME} (51 MB) from:\n"
-                f"  https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/{VOCODER_FILENAME}\n"
-                f"Place it in: {model_path} or {model_path.parent}"
-            )
-        self._vocoder_path = str(vocoder_path)
+        # Matcha needs a separate vocoder
+        if self._model_type == "matcha":
+            vocoder_filename = "vocos-22khz-univ.onnx"
+            vocoder_path = Path(self._vocoder_dir) / vocoder_filename
+            if not vocoder_path.is_file():
+                vocoder_path = model_path.parent / vocoder_filename
+            if not vocoder_path.is_file():
+                raise SherpaTTSError(
+                    f"Vocoder not found: {vocoder_filename}\n"
+                    f"Download (51 MB): https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/{vocoder_filename}\n"
+                    f"Place in: {self._vocoder_dir} or {model_path.parent}"
+                )
+            self._vocoder_path = str(vocoder_path)
 
-        # Load model in thread pool (synchronous ONNX session creation)
+        # Load model in thread pool
         try:
             self._tts = await asyncio.to_thread(self._load_model)
         except Exception as exc:
@@ -141,38 +187,33 @@ class SherpaTTS:
 
         # Smoke test
         try:
-            pcm, _ = await self.synthesize("你好")
+            pcm, sr = await self.synthesize("你好")
+            self._sample_rate = sr
             if not pcm or len(pcm) < 500:
                 raise SherpaTTSError(
-                    f"sherpa-onnx smoke test produced too little output ({len(pcm)} bytes)"
+                    f"Smoke test produced too little output ({len(pcm)} bytes)"
                 )
         except SherpaTTSError:
             raise
         except Exception as exc:
             logger.exception("sherpa-onnx smoke test failed")
             raise SherpaTTSError(
-                f"sherpa-onnx smoke test failed: {type(exc).__name__}: {exc}"
+                f"Smoke test failed: {type(exc).__name__}: {exc}"
             ) from exc
 
         self._ready = True
         logger.info(
-            "sherpa-onnx TTS ready: model=matcha-icefall-zh-baker, "
-            "sample_rate=%d Hz, num_threads=%d",
-            self.sample_rate,
-            self._num_threads,
+            "sherpa-onnx TTS ready: type=%s, sample_rate=%d Hz",
+            self._model_type, self._sample_rate,
         )
 
     async def synthesize(self, text: str) -> tuple[bytes, int]:
         """Synthesize text to PCM16 audio bytes.
 
-        Args:
-            text: The text to speak. Empty/silent strings return empty audio.
-
-        Returns:
-            (pcm16_bytes, sample_rate) — raw 16-bit mono PCM at 22050 Hz.
+        Returns (pcm16_bytes, sample_rate). Empty text returns empty bytes.
         """
         if not text or not text.strip():
-            return b"", self.sample_rate
+            return b"", self._sample_rate or 44100
 
         if not self._tts:
             raise SherpaTTSError(
@@ -183,13 +224,8 @@ class SherpaTTS:
 
         try:
             audio = await asyncio.to_thread(
-                self._tts.generate,
-                text,
-                sid=0,           # matcha-icefall-zh-baker has single speaker
-                speed=self._speed,
+                self._tts.generate, text, sid=0, speed=self._speed,
             )
-            # audio.samples: numpy float32 array in [-1, 1]
-            # audio.sample_rate: int (22050 for matcha-icefall-zh-baker)
             pcm_bytes = _float32_to_pcm16(audio.samples)
             return pcm_bytes, audio.sample_rate
 
@@ -206,32 +242,42 @@ class SherpaTTS:
         """Load sherpa-onnx OfflineTts instance (called in thread pool)."""
         import sherpa_onnx
 
-        model_dir = self._model_dir
+        md = self._model_dir
 
-        config = sherpa_onnx.OfflineTtsConfig(
-            model=sherpa_onnx.OfflineTtsModelConfig(
-                matcha=sherpa_onnx.OfflineTtsMatchaModelConfig(
-                    acoustic_model=str(Path(model_dir) / "model-steps-3.onnx"),
-                    vocoder=self._vocoder_path,
-                    lexicon=str(Path(model_dir) / "lexicon.txt"),
-                    tokens=str(Path(model_dir) / "tokens.txt"),
-                    dict_dir=str(Path(model_dir) / "dict"),
+        if self._model_type == "vits":
+            model_config = sherpa_onnx.OfflineTtsModelConfig(
+                vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+                    model=str(Path(md) / "model.onnx"),
+                    lexicon=str(Path(md) / "lexicon.txt"),
+                    tokens=str(Path(md) / "tokens.txt"),
+                    dict_dir=str(Path(md) / "dict"),
                 ),
                 provider="cpu",
                 num_threads=self._num_threads,
-            ),
-            max_num_sentences=1,  # sentence-level for streaming
-        )
+            )
+        else:  # matcha
+            model_config = sherpa_onnx.OfflineTtsModelConfig(
+                matcha=sherpa_onnx.OfflineTtsMatchaModelConfig(
+                    acoustic_model=str(Path(md) / "model-steps-3.onnx"),
+                    vocoder=self._vocoder_path,
+                    lexicon=str(Path(md) / "lexicon.txt"),
+                    tokens=str(Path(md) / "tokens.txt"),
+                    dict_dir=str(Path(md) / "dict"),
+                ),
+                provider="cpu",
+                num_threads=self._num_threads,
+            )
 
+        config = sherpa_onnx.OfflineTtsConfig(
+            model=model_config,
+            max_num_sentences=1,
+        )
         return sherpa_onnx.OfflineTts(config)
 
 
 # ---- Helpers ----
 
 def _float32_to_pcm16(samples: np.ndarray) -> bytes:
-    """Convert float32 audio samples in [-1, 1] to PCM16 bytes.
-
-    Clips values outside [-1, 1] to prevent overflow.
-    """
+    """Convert float32 audio samples in [-1, 1] to PCM16 bytes."""
     clipped = np.clip(samples, -1.0, 1.0)
     return (clipped * 32767).astype(np.int16).tobytes()

@@ -76,7 +76,9 @@ async def lifespan(app: FastAPI):
             await sherpa_tts.initialize()
             tts = sherpa_tts
             logger.info(
-                "sherpa-onnx TTS ready (matcha-icefall-zh-baker, 22050 Hz)"
+                "sherpa-onnx TTS ready (model=%s, %d Hz)",
+                sherpa_tts._model_type if hasattr(sherpa_tts, '_model_type') else 'auto',
+                sherpa_tts.sample_rate,
             )
         except SherpaTTSError as exc:
             logger.warning(

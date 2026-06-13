@@ -16,6 +16,7 @@ dependencies = [
     "torch>=2.4,<3",
     "pydantic-settings>=2.14.1",
     "sherpa-onnx>=1.13",
+    "onnxruntime>=1.20",
 ]
 
 [tool.uv]
