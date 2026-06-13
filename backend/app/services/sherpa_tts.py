@@ -28,13 +28,15 @@ logger = logging.getLogger(__name__)
 # Source: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
 REQUIRED_MODEL_FILES = [
     "model-steps-3.onnx",      # acoustic model
-    "vocos-22khz-univ.onnx",   # vocoder
     "lexicon.txt",             # Chinese word→phoneme lexicon
     "tokens.txt",              # token list
 ]
 REQUIRED_MODEL_DIRS = [
     "dict",                    # multi-word pronunciation dictionary
 ]
+
+# Vocoder filename — looked up in model_dir first, then parent dir
+VOCODER_FILENAME = "vocos-22khz-univ.onnx"
 
 
 class SherpaTTSError(Exception):
@@ -115,6 +117,18 @@ class SherpaTTS:
             dpath = model_path / dname
             if not dpath.is_dir():
                 logger.warning("Optional model directory missing: %s", dpath)
+
+        # Vocoder: try model dir first, then parent dir
+        vocoder_path = model_path / VOCODER_FILENAME
+        if not vocoder_path.is_file():
+            vocoder_path = model_path.parent / VOCODER_FILENAME
+        if not vocoder_path.is_file():
+            raise SherpaTTSError(
+                f"Vocoder not found. Download {VOCODER_FILENAME} (51 MB) from:\n"
+                f"  https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/{VOCODER_FILENAME}\n"
+                f"Place it in: {model_path} or {model_path.parent}"
+            )
+        self._vocoder_path = str(vocoder_path)
 
         # Load model in thread pool (synchronous ONNX session creation)
         try:
@@ -198,7 +212,7 @@ class SherpaTTS:
             model=sherpa_onnx.OfflineTtsModelConfig(
                 matcha=sherpa_onnx.OfflineTtsMatchaModelConfig(
                     acoustic_model=str(Path(model_dir) / "model-steps-3.onnx"),
-                    vocoder=str(Path(model_dir) / "vocos-22khz-univ.onnx"),
+                    vocoder=self._vocoder_path,
                     lexicon=str(Path(model_dir) / "lexicon.txt"),
                     tokens=str(Path(model_dir) / "tokens.txt"),
                     dict_dir=str(Path(model_dir) / "dict"),

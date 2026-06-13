@@ -2,14 +2,15 @@
 #
 # Downloads:
 #   - matcha-icefall-zh-baker.tar.bz2 (~73 MB) — Chinese female TTS model
-#     Contains: model-steps-3.onnx, vocos-22khz-univ.onnx, lexicon.txt, tokens.txt, dict/
+#     Contains: model-steps-3.onnx, lexicon.txt, tokens.txt, dict/
+#   - vocos-22khz-univ.onnx (~51 MB) — Universal vocoder (shared)
 #
 # Model: matcha-icefall-zh-baker (Matcha-TTS, Apache 2.0)
 # Sample rate: 22050 Hz
 # Voice: 1 (female, Chinese Mandarin)
 # Text processing: Built-in FST + lexicon (NO runtime espeak-ng dependency)
 #
-# Source: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
+# Source: https://github.com/k2-fsa/sherpa-onnx/releases
 
 param(
     [string]$ModelDir = "backend\models\sherpa-voices"
@@ -110,6 +111,27 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  Download Complete!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+# ---- Download shared vocoder ----
+$VocoderFile = "vocos-22khz-univ.onnx"
+$VocoderPath = Join-Path $TargetDir $VocoderFile
+$VocoderUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/$VocoderFile"
+
+if (Test-Path $VocoderPath) {
+    Write-Host "[~] Vocoder already exists: $VocoderPath" -ForegroundColor DarkGray
+} else {
+    Write-Host "[↓] Downloading vocoder: $VocoderFile (51 MB)..." -ForegroundColor Blue
+    try {
+        Invoke-WebRequest -Uri $VocoderUrl -OutFile $VocoderPath -UseBasicParsing
+        Write-Host "[+] Downloaded vocoder to: $VocoderPath" -ForegroundColor Green
+    } catch {
+        Write-Host "[!] Failed to download vocoder: $_" -ForegroundColor Red
+        Write-Host "[!] Manual download: $VocoderUrl" -ForegroundColor Red
+        Write-Host "[!] Place it at: $TargetDir" -ForegroundColor Red
+    }
+}
+
 Write-Host ""
 
 # Print .env configuration
