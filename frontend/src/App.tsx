@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { VideoPanel } from './components/VideoPanel';
 import { AudioIndicator } from './components/AudioIndicator';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ControlBar } from './components/ControlBar';
 import { ChatLog } from './components/ChatLog';
+import { BackgroundAmbiance, type AmbianceState } from './components/BackgroundAmbiance';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useVAD } from './hooks/useVAD';
@@ -59,6 +60,14 @@ function App() {
     sendMessage: ws.send,
     enabled: conversationActive && media.cameraEnabled,
   });
+
+  // ---- Background ambiance: light color follows conversation state ----
+  const ambianceState: AmbianceState = useMemo(() => {
+    if (!conversationActive) return 'idle';
+    if (vad.isSpeaking) return 'user-speaking';
+    if (aiSpeaking) return 'ai-speaking';
+    return 'idle';
+  }, [conversationActive, vad.isSpeaking, aiSpeaking]);
 
   // PR 4: Immediately stop AI audio when user starts speaking (local barge-in).
   useEffect(() => {
@@ -273,10 +282,14 @@ function App() {
   }, [media.toggleMic, ws.send, handleStopConversation]);
 
   return (
-    <div className="app">
-      <header className="app-header">
+    <>
+      <BackgroundAmbiance state={ambianceState} enabled={conversationActive} />
+      <div className="bg-ambiance-noise" aria-hidden="true" />
+      <div className="app">
+        <header className="app-header">
+        <div className="app-logo" aria-hidden="true">◈</div>
         <h1>OmniSight</h1>
-        <span className="app-subtitle">AI Visual Conversation Assistant</span>
+        <span className="app-subtitle">AI Vision</span>
       </header>
 
       <main className="app-main">
@@ -328,7 +341,8 @@ function App() {
           />
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 

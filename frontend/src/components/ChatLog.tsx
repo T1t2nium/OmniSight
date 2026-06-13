@@ -5,7 +5,7 @@ interface ChatLogProps {
   messages: WSMessage[];
 }
 
-function renderMessage(msg: WSMessage) {
+function BubbledMessage({ msg }: { msg: WSMessage }) {
   switch (msg.type) {
     // PR 4: tts_audio and interrupt are handled by audio player, not displayed
     case 'tts_audio':
@@ -15,14 +15,17 @@ function renderMessage(msg: WSMessage) {
     case 'transcript': {
       const p = msg.payload as unknown as TranscriptPayload;
       return (
-        <div className="chat-bubble chat-bubble-user">
-          <div className="chat-bubble-label">You</div>
-          <div className="chat-bubble-text">{p.text}</div>
-          {p.language && (
-            <div className="chat-bubble-meta">
-              {p.language} &middot; {(p.duration_ms / 1000).toFixed(1)}s
-            </div>
-          )}
+        <div className="chat-bubble-row user">
+          <div className="chat-bubble-avatar user" aria-hidden="true">👤</div>
+          <div className="chat-bubble chat-bubble-user">
+            <div className="chat-bubble-label">You</div>
+            <div className="chat-bubble-text">{p.text}</div>
+            {p.language && (
+              <div className="chat-bubble-meta">
+                {p.language} &middot; {(p.duration_ms / 1000).toFixed(1)}s
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -31,24 +34,30 @@ function renderMessage(msg: WSMessage) {
       const p = msg.payload as unknown as LLMResponsePayload;
       if (p.done) {
         return (
-          <div className="chat-bubble chat-bubble-ai">
-            <div className="chat-bubble-label">AI</div>
-            <div className="chat-bubble-text">{p.delta}</div>
-            {p.total_duration > 0 && (
-              <div className="chat-bubble-meta">
-                {(p.total_duration * 1000).toFixed(0)}ms
-              </div>
-            )}
+          <div className="chat-bubble-row">
+            <div className="chat-bubble-avatar ai" aria-hidden="true">◈</div>
+            <div className="chat-bubble chat-bubble-ai">
+              <div className="chat-bubble-label">AI</div>
+              <div className="chat-bubble-text">{p.delta}</div>
+              {p.total_duration > 0 && (
+                <div className="chat-bubble-meta">
+                  {(p.total_duration * 1000).toFixed(0)}ms
+                </div>
+              )}
+            </div>
           </div>
         );
       }
-      // Streaming delta — render with blinking cursor
+      // Streaming delta
       return (
-        <div className="chat-bubble chat-bubble-ai chat-bubble-streaming">
-          <div className="chat-bubble-label">AI</div>
-          <div className="chat-bubble-text">
-            {p.delta || '...'}
-            <span className="streaming-cursor" />
+        <div className="chat-bubble-row">
+          <div className="chat-bubble-avatar ai" aria-hidden="true">◈</div>
+          <div className="chat-bubble chat-bubble-ai chat-bubble-streaming">
+            <div className="chat-bubble-label">AI</div>
+            <div className="chat-bubble-text">
+              {p.delta || '...'}
+              <span className="streaming-cursor" />
+            </div>
           </div>
         </div>
       );
@@ -100,14 +109,22 @@ export function ChatLog({ messages }: ChatLogProps) {
   }, [messages]);
 
   return (
-    <div className="chat-log">
+    <div className="chat-log" role="log" aria-live="polite" aria-label="Conversation messages">
       {messages.length === 0 && (
         <div className="chat-empty">
-          Start a conversation to see messages here...
+          <div className="chat-empty-icon" aria-hidden="true">💬</div>
+          <h3>Start a Conversation</h3>
+          <p>Click the green button below to begin. Your camera and microphone will be activated.</p>
+          <div className="chat-empty-hints">
+            <span className="chat-empty-hint">🎤 Speak naturally</span>
+            <span className="chat-empty-hint">📷 AI sees your camera</span>
+            <span className="chat-empty-hint">Space = Toggle Mic</span>
+            <span className="chat-empty-hint">Esc = Interrupt</span>
+          </div>
         </div>
       )}
       {messages.map((msg, i) => {
-        const rendered = renderMessage(msg);
+        const rendered = <BubbledMessage msg={msg} />;
         if (!rendered) return null;
         return (
           <div key={i} className={`chat-message chat-${msg.type}`}>

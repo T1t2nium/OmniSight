@@ -1,0 +1,131 @@
+/* ===== OmniSight Design Tokens =====
+ * PR 6: UI Beautification — Foundation + Visual Upgrade
+ *
+ * All visual properties derive from these tokens.
+ * Modify tokens here to change the entire theme.
+ * Components should NEVER use hardcoded values.
+ */
+
+:root {
+  /* ===== Color Palette =====
+   * Warm dark theme — softer than GitHub Dark, kinder to eyes
+   */
+
+  /* Backgrounds */
+  --color-bg-primary: #0f0f14;
+  --color-bg-secondary: #1a1a24;
+  --color-bg-tertiary: #252534;
+  --color-bg-hover: #32324a;
+
+  /* Borders */
+  --color-border: #252534;
+  --color-border-hover: #3a3a55;
+
+  /* Text */
+  --color-text-primary: #e8e6f0;
+  --color-text-secondary: #9895a8;
+  --color-text-muted: #55526b;
+
+  /* Semantic */
+  --color-accent: #7eb8ff;
+  --color-accent-soft: rgba(126, 184, 255, 0.12);
+  --color-success: #4ade80;
+  --color-success-soft: rgba(74, 222, 128, 0.12);
+  --color-error: #f87171;
+  --color-error-fg: #fca5a5;
+  --color-warning: #fbbf24;
+
+  /* Gradients */
+  --gradient-accent: linear-gradient(135deg, #7eb8ff, #a78bfa);
+  --gradient-success: linear-gradient(135deg, #4ade80, #34d399);
+  --gradient-welcome: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+
+  /* Buttons */
+  --color-btn-start-bg: #22c55e;
+  --color-btn-start-border: #4ade80;
+  --color-btn-start-glow: rgba(34, 197, 94, 0.35);
+  --color-btn-stop-bg: #ef4444;
+  --color-btn-stop-border: #f87171;
+
+  /* Chat bubbles */
+  --color-bubble-user-bg: #1a3a2a;
+  --color-bubble-user-border: #2d5a3d;
+  --color-bubble-ai-bg: #1e1e30;
+  --color-bubble-ai-border: #2e2e48;
+  --color-bubble-error-bg: #3d1515;
+
+  /* ===== Spacing Scale (4px base) ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ===== Typography ===== */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+
+  --text-xs: 0.65rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.85rem;
+  --text-lg: 0.95rem;
+  --text-xl: 1.15rem;
+  --text-2xl: 1.35rem;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.55;
+  --line-height-relaxed: 1.65;
+
+  /* ===== Border Radius ===== */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== Shadows ===== */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow-green: 0 0 14px rgba(74, 222, 128, 0.4);
+  --shadow-glow-red: 0 0 14px rgba(248, 113, 113, 0.4);
+  --shadow-glow-blue: 0 0 14px rgba(126, 184, 255, 0.4);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  /* ===== Transitions ===== */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.35s ease;
+
+  /* ===== Z-Index Layers ===== */
+  --z-base: 0;
+  --z-status: 10;
+  --z-control: 20;
+  --z-overlay: 100;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0s;
+    --transition-normal: 0s;
+    --transition-slow: 0s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
