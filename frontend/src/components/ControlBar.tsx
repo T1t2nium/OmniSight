@@ -23,7 +23,7 @@ export function ControlBar({
         className={`btn ${conversationActive ? 'btn-stop' : 'btn-start'}`}
         onClick={conversationActive ? onStopConversation : onStartConversation}
       >
-        {conversationActive ? '⏹ Stop Conversation' : '▶ Start Conversation'}
+        {conversationActive ? '⏹ Stop Conversation [Esc]' : '▶ Start Conversation'}
       </button>
 
       <button
@@ -39,7 +39,7 @@ export function ControlBar({
         onClick={onToggleMic}
         disabled={!conversationActive}
       >
-        {micEnabled ? '🎤 Mic On' : '🎤 Mic Off'}
+        {micEnabled ? '🎤 Mic On [Space]' : '🎤 Mic Off [Space]'}
       </button>
     </div>
   );

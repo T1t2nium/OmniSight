@@ -1,6 +1,7 @@
 """OmniSight Backend - AI Visual Conversation Assistant."""
 
 import sys
+import time
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -12,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routes.ws import router as ws_router
+from app.routes.ws import router as ws_router, state_manager
 from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.conversation import ConversationOrchestrator
@@ -24,6 +25,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+_start_time = time.time()
 
 
 @asynccontextmanager
@@ -49,8 +51,8 @@ async def lifespan(app: FastAPI):
     )
     ollama = OllamaClient(settings.ollama_base_url, settings.ollama_model)
 
-    # Health check
-    ollama_ok = await ollama.check_health()
+    # Health check with retry (Ollama may still be starting up)
+    ollama_ok = await ollama.check_health_with_retry()
     if ollama_ok:
         logger.info("Ollama model '%s' is available", settings.ollama_model)
     else:
@@ -86,6 +88,10 @@ async def lifespan(app: FastAPI):
     orchestrator = ConversationOrchestrator(transcriber, ollama, piper_tts)
 
     # Store in app.state for route handlers
+    # PR 5: Configure and start stale session cleanup
+    state_manager.set_idle_timeout(settings.session_idle_timeout)
+    await state_manager.start_cleanup_task()
+
     app.state.settings = settings
     app.state.transcriber = transcriber
     app.state.ollama = ollama
@@ -95,13 +101,14 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down AI services")
+    await state_manager.stop_cleanup_task()
     await ollama.close()
     logger.info("OmniSight backend shut down")
 
 
 app = FastAPI(
     title="OmniSight",
-    version="0.3.0",
+    version="0.4.0",
     description="AI Visual Conversation Assistant Backend",
     lifespan=lifespan,
 )
@@ -121,11 +128,14 @@ app.include_router(ws_router)
 
 @app.get("/health")
 async def health(request: Request):
-    """Health check — includes Ollama connectivity status."""
+    """Health check — includes Ollama connectivity and session stats."""
     ollama = getattr(request.app.state, "ollama", None)
     ollama_ok = await ollama.check_health() if ollama else False
+    active_sessions = await state_manager.get_session_count()
     return {
         "status": "ok",
-        "version": "0.2.0",
+        "version": "0.4.0",
         "ollama_available": ollama_ok,
+        "active_sessions": active_sessions,
+        "uptime_seconds": round(time.time() - _start_time, 1),
     }

@@ -28,6 +28,8 @@ from app.models.schemas import (
 from app.models.state import ConnectionStateManager
 from app.services.audio import AudioBufferManager
 from app.services.conversation import ConversationOrchestrator
+from app.services.frame_manager import FrameMotionDetector
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ router = APIRouter()
 # Shared service instances
 state_manager = ConnectionStateManager()
 audio_manager = AudioBufferManager()
+motion_detector = FrameMotionDetector()  # PR 5
 
 # Map of session_id → running AI task (for cancellation on disconnect or new utterance)
 _running_tasks: dict[str, asyncio.Task] = {}
@@ -46,6 +49,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     """Accept a WebSocket connection and dispatch messages by type."""
     await websocket.accept()
     session_id: str | None = None
+    heartbeat_task: asyncio.Task | None = None
 
     try:
         while True:
@@ -65,6 +69,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     f"Session {session_id} registered",
                 )
                 logger.info("Session registered: %s", session_id)
+                # PR 5: Start heartbeat for this session
+                heartbeat_task = asyncio.create_task(
+                    _heartbeat_loop(websocket, session_id)
+                )
             elif msg_session != session_id:
                 continue
 
@@ -73,21 +81,41 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             msg_type = data.get("type", "")
             payload = data.get("payload", {})
 
-            if msg_type == "audio_chunk":
-                await _handle_audio_chunk(websocket, session_id, payload)
-            elif msg_type == "video_frame":
-                await _handle_video_frame(websocket, session_id, payload)
-            elif msg_type == "vad_event":
-                await _handle_vad_event(websocket, session_id, payload)
-            else:
-                await _send_error(websocket, session_id,
-                                  f"Unknown message type: {msg_type}")
+            # PR 5: wrap each handler in try/except to prevent
+            # a single bad message from breaking the entire session
+            try:
+                if msg_type == "audio_chunk":
+                    await _handle_audio_chunk(websocket, session_id, payload)
+                elif msg_type == "video_frame":
+                    await _handle_video_frame(websocket, session_id, payload)
+                elif msg_type == "vad_event":
+                    await _handle_vad_event(websocket, session_id, payload)
+                else:
+                    await _send_error(websocket, session_id,
+                                      f"Unknown message type: {msg_type}")
+            except Exception:
+                logger.exception(
+                    "Handler error for msg_type=%s session=%s",
+                    msg_type, session_id,
+                )
+                await _send_error(
+                    websocket, session_id,
+                    f"Internal error processing {msg_type}",
+                )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected: %s", session_id)
     except Exception:
         logger.exception("WS error for session %s", session_id)
     finally:
+        # Cancel heartbeat
+        if heartbeat_task and not heartbeat_task.done():
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
         if session_id:
             # Cancel any running AI pipeline
             task = _running_tasks.pop(session_id, None)
@@ -138,10 +166,22 @@ async def _handle_audio_chunk(
 async def _handle_video_frame(
     ws: WebSocket, session_id: str, payload: dict
 ) -> None:
-    """Store the latest base64 JPEG frame for vision queries, then echo stats."""
+    """Store the latest JPEG frame for vision queries, with motion detection.
+
+    PR 5: unchanged frames (below motion threshold) are still counted but
+    not stored as latest_frame — they don't trigger a new vision query.
+    """
     b64_data = payload.get("data", "")
+    motion_skipped = False
+
     if b64_data:
-        await state_manager.set_latest_frame(session_id, b64_data)
+        settings = get_settings()
+        if settings.motion_detection_enabled:
+            if not motion_detector.is_significant_change(b64_data):
+                motion_skipped = True
+                b64_data = ""  # Don't update latest_frame
+        if b64_data:
+            await state_manager.set_latest_frame(session_id, b64_data)
 
     frame_count = await state_manager.increment_frames(session_id)
     session_state = await state_manager.get(session_id)
@@ -151,7 +191,10 @@ async def _handle_video_frame(
         total_frames=frame_count,
         total_audio_ms=session_state.audio_duration_ms if session_state else 0,
     )
-    await _send_message(ws, session_id, "echo", echo.model_dump())
+    echo_dict = echo.model_dump()
+    if motion_skipped:
+        echo_dict["motion_skipped"] = True
+    await _send_message(ws, session_id, "echo", echo_dict)
 
 
 async def _handle_vad_event(
@@ -167,6 +210,8 @@ async def _handle_vad_event(
     if event == "speech_start":
         # Clear any residual audio from previous VAD cycle
         audio_manager.clear(session_id)
+        # PR 5: reset motion detector for new utterance
+        motion_detector.reset()
 
         # Barge-in: cancel running AI pipeline + notify frontend to stop audio
         existing = _running_tasks.get(session_id)
@@ -317,6 +362,36 @@ def _dump_raw_wav(raw_wav: bytes) -> None:
     path = debug_dir / f"received_{timestamp}.wav"
     path.write_bytes(raw_wav)
     logger.info("Debug received WAV saved: %s (%.1f KB)", path, len(raw_wav) / 1024)
+
+
+# ---- Heartbeat ----
+
+
+async def _heartbeat_loop(ws: WebSocket, session_id: str) -> None:
+    """Send WebSocket protocol-level ping frames every N seconds.
+
+    If no pong is received within the timeout window the connection is
+    considered dead and is closed.
+    """
+    settings = get_settings()
+    interval = settings.ws_ping_interval
+    timeout = settings.ws_ping_timeout
+
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            pong_waiter = await ws.ping()
+            await asyncio.wait_for(pong_waiter, timeout=timeout)
+            logger.debug("Heartbeat OK for %s", session_id)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Heartbeat timeout for %s — closing connection", session_id
+            )
+            await ws.close(code=1000)
+            return
+        except Exception:
+            # Connection already gone — exit silently
+            return
 
 
 # ---- Helpers ----

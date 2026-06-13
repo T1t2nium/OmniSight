@@ -8,6 +8,10 @@ const WS_URL = `ws://${window.location.host}/ws`;
 export interface UseWebSocketReturn {
   connectionState: ConnectionState;
   lastMessage: WSMessage | null;
+  /** Estimated one-way latency in ms (PR 5). */
+  latencyMs: number;
+  /** Current reconnect attempt number (0 if connected, PR 5). */
+  reconnectAttempt: number;
   send: (message: WSMessage) => void;
   onMessage: (handler: (msg: WSMessage) => void) => () => void;
 }
@@ -21,6 +25,8 @@ export interface UseWebSocketReturn {
 export function useWebSocket(sessionId: string): UseWebSocketReturn {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null);
+  const [latencyMs, setLatencyMs] = useState(0);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const clientRef = useRef<WSClient | null>(null);
   const handlersRef = useRef<Set<(msg: WSMessage) => void>>(new Set());
   // Track sessionId to avoid re-running effect unnecessarily
@@ -31,10 +37,20 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
     const client = createWSClient(WS_URL);
     clientRef.current = client;
 
-    const unsubState = client.onStateChange(setConnectionState);
+    const unsubState = client.onStateChange((state) => {
+      setConnectionState(state);
+      // Reset reconnect counter when connected
+      if (state === 'connected') {
+        setReconnectAttempt(0);
+      }
+    });
     const unsubMsg = client.onMessage((msg) => {
       setLastMessage(msg);
       handlersRef.current.forEach((h) => h(msg));
+    });
+    const unsubLatency = client.onLatencyUpdate(setLatencyMs);
+    const unsubReconnect = client.onReconnectStatus((info) => {
+      setReconnectAttempt(info.attempt);
     });
 
     client.connect();
@@ -42,6 +58,8 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
     return () => {
       unsubState();
       unsubMsg();
+      unsubLatency();
+      unsubReconnect();
       client.disconnect();
       clientRef.current = null;
     };
@@ -63,5 +81,5 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
     [],
   );
 
-  return { connectionState, lastMessage, send, onMessage };
+  return { connectionState, lastMessage, latencyMs, reconnectAttempt, send, onMessage };
 }
