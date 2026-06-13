@@ -242,6 +242,8 @@ class ConversationOrchestrator:
                 len(text) - len(clean_text),
                 ''.join(sorted(stripped))[:80],
             )
+        else:
+            logger.debug("TTS text (clean): %r", text[:100])
 
         try:
             pcm_bytes, sr = await self._tts.synthesize(clean_text)
