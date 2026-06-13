@@ -234,6 +234,15 @@ class ConversationOrchestrator:
         if not clean_text.strip():
             return
 
+        # Log stripped characters for OOV diagnosis
+        stripped = set(text) - set(clean_text) - {' ', '\n', '\r', '\t'}
+        if stripped:
+            logger.debug(
+                "TTS cleaned: %d chars stripped: %r",
+                len(text) - len(clean_text),
+                ''.join(sorted(stripped))[:80],
+            )
+
         try:
             pcm_bytes, sr = await self._tts.synthesize(clean_text)
             if not pcm_bytes:
@@ -300,29 +309,56 @@ _TTS_ALLOWED_BLOCKS = [
 def _clean_for_tts(text: str) -> str:
     """Remove formatting and non-speakable characters from TTS text.
 
-    Strips Markdown, HTML, emoji, and Unicode symbols that the TTS
-    engine cannot pronounce (causing OOV warnings and garbled audio).
+    Strips Markdown, HTML, emoji, control chars, and rare Unicode that
+    the TTS lexicon cannot pronounce (causing OOV warnings).
     """
     result = text
     for pattern, replacement in _TTS_REPLACEMENTS:
         result = pattern.sub(replacement, result)
 
-    # Filter out characters the TTS lexicon can't handle (emoji, symbols, etc.)
-    cleaned_chars = []
+    # Filter to only characters the TTS engine can pronounce:
+    # CJK Unified Ideographs (common Chinese), ASCII letters/numbers,
+    # Chinese/English punctuation, and whitespace.
+    cleaned_chars: list[str] = []
     for ch in result:
         cp = ord(ch)
-        if ch in (' ', '\n', '\t'):
+        # Whitespace → space
+        if ch in (' ', '\n', '\r', '\t', '　'):
             cleaned_chars.append(' ')
             continue
-        for lo, hi in _TTS_ALLOWED_BLOCKS:
-            if lo <= cp <= hi:
-                cleaned_chars.append(ch)
-                break
-    result = ''.join(cleaned_chars)
+        # ASCII printable (letters, digits, basic punctuation)
+        if 0x20 <= cp <= 0x7E:
+            cleaned_chars.append(ch)
+            continue
+        # CJK Unified Ideographs — only the main block (common Chinese)
+        if 0x4E00 <= cp <= 0x9FFF:
+            cleaned_chars.append(ch)
+            continue
+        # CJK punctuation (。、，！？：；""''）
+        if 0x3000 <= cp <= 0x303F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth punctuation and Latin (！＂＃＄％)
+        if 0xFF00 <= cp <= 0xFF0F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth digits and uppercase (０１２３ＡＢＣ)
+        if 0xFF10 <= cp <= 0xFF3F:
+            cleaned_chars.append(ch)
+            continue
+        # Fullwidth lowercase (ａｂｃ)
+        if 0xFF41 <= cp <= 0xFF5E:
+            cleaned_chars.append(ch)
+            continue
+        # Everything else: emoji, symbols, rare CJK, control chars → dropped
 
+    result = ''.join(cleaned_chars)
     # Collapse whitespace
     result = re.sub(r'\s+', ' ', result)
     return result.strip()
+
+# Remove the Unicode block list since we inline the logic above
+_TTS_ALLOWED_BLOCKS = []  # kept for backward compat, unused
 
 
 def _normalize_pcm16(pcm_bytes: bytes, target_peak: float = 0.85) -> bytes:
