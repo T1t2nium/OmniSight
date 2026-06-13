@@ -22,6 +22,7 @@ export function ControlBar({
       <button
         className={`btn ${conversationActive ? 'btn-stop' : 'btn-start'}`}
         onClick={conversationActive ? onStopConversation : onStartConversation}
+        aria-label={conversationActive ? 'Stop Conversation' : 'Start Conversation'}
       >
         {conversationActive ? '⏹ Stop Conversation [Esc]' : '▶ Start Conversation'}
       </button>
@@ -30,6 +31,7 @@ export function ControlBar({
         className={`btn ${cameraEnabled ? 'btn-active' : 'btn-inactive'}`}
         onClick={onToggleCamera}
         disabled={!conversationActive}
+        aria-label={cameraEnabled ? 'Turn Camera Off' : 'Turn Camera On'}
       >
         {cameraEnabled ? '📷 Camera On' : '📷 Camera Off'}
       </button>
@@ -38,6 +40,7 @@ export function ControlBar({
         className={`btn ${micEnabled ? 'btn-active' : 'btn-inactive'}`}
         onClick={onToggleMic}
         disabled={!conversationActive}
+        aria-label={micEnabled ? 'Mute Microphone' : 'Unmute Microphone'}
       >
         {micEnabled ? '🎤 Mic On [Space]' : '🎤 Mic Off [Space]'}
       </button>

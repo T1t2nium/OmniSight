@@ -30,12 +30,28 @@ export function ConnectionStatus({
       ? `Reconnecting (${reconnectAttempt}/${maxReconnectAttempts})...`
       : label;
 
+  // PR 6: latency color gradient
+  const latencyClass =
+    latencyMs !== undefined && latencyMs > 0
+      ? latencyMs < 50
+        ? 'latency-good'
+        : latencyMs < 200
+          ? 'latency-ok'
+          : 'latency-bad'
+      : '';
+
   return (
-    <div className="connection-status">
-      <span className="status-dot" style={{ backgroundColor: color }} />
-      <span className="status-label">{displayLabel}</span>
+    <div className="connection-status" aria-live="polite">
+      <span
+        className={`status-dot ${state === 'connected' ? 'connected' : ''} ${state === 'connecting' ? 'connecting' : ''}`}
+        style={{ backgroundColor: color }}
+      />
+      <span className="status-label">
+        {state === 'connected' && '✓ '}
+        {displayLabel}
+      </span>
       {state === 'connected' && latencyMs !== undefined && latencyMs > 0 && (
-        <span className="latency-indicator">{latencyMs}ms</span>
+        <span className={`latency-indicator ${latencyClass}`}>{latencyMs}ms</span>
       )}
     </div>
   );

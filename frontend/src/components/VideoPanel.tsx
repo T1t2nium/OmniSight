@@ -27,14 +27,15 @@ export function VideoPanel({ stream, cameraEnabled, streamVersion }: VideoPanelP
 
   if (!cameraEnabled || !stream) {
     return (
-      <div className="video-panel video-placeholder">
+      <div className="video-panel video-placeholder" aria-label="Camera preview">
+        <span className="placeholder-icon" aria-hidden="true">📷</span>
         <div className="placeholder-text">Camera Off</div>
       </div>
     );
   }
 
   return (
-    <div className="video-panel">
+    <div className="video-panel" aria-label="Camera preview">
       <video
         ref={videoRef}
         autoPlay

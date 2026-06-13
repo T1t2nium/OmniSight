@@ -11,8 +11,9 @@
 | 1 | `phase/1-project-setup` | 项目初始化、文档、开发环境 ✅ | 无 |
 | 2 | `phase/2-ws-streaming` | 音视频传输管道（无 AI） ✅ | PR 1 |
 | 3 | `phase/3-local-ai-core` | Ollama + faster-whisper 核心对话 ✅ | PR 2 |
-| 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 | PR 3 |
-| 5 | `phase/5-polish` | 健壮性、性能优化、测试 | PR 4 |
+| 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 ✅ | PR 3 |
+| 5 | `phase/5-polish` | 健壮性、性能优化、测试 ✅ | PR 4 |
+| 6 | `phase/6-ui-polish` | 前端 UI 美化：设计系统基础 ✅ | PR 5 |
 
 ---
 
@@ -132,13 +133,46 @@
 
 ### 任务清单
 
-- [ ] 后端：WS 心跳 + 会话超时
-- [ ] 后端：Ollama 健康检查
-- [ ] 后端：运动检测优化帧率
-- [ ] 后端：优雅降级错误处理
-- [ ] 前端：ErrorBoundary
-- [ ] 前端：重连 + 恢复对话
-- [ ] 前端：延迟指示器
-- [ ] 前端：键盘快捷键
-- [ ] 测试：WS 测试、音频测试
-- [ ] 压力测试：30 分钟对话
+- [x] 后端：WS 心跳 + 会话超时
+- [x] 后端：Ollama 健康检查
+- [x] 后端：运动检测优化帧率
+- [x] 后端：优雅降级错误处理
+- [x] 前端：ErrorBoundary
+- [x] 前端：重连 + 恢复对话
+- [x] 前端：延迟指示器
+- [x] 前端：键盘快捷键
+- [x] 测试：WS 测试、音频测试
+- [x] 压力测试：30 分钟对话
+
+---
+
+## PR 6: 前端 UI 美化：设计系统基础
+
+### 任务清单
+
+- [x] 安装 SKILL：Frontend Design Toolkit + Refactoring UI Plugin
+- [x] 创建 CSS 设计 token 体系 (`tokens.css`)
+- [x] App.css 全面迁移到 CSS 变量
+- [x] 字体统一：六级字号 scale
+- [x] 聊天气泡美化：淡入动画、渐变背景、呼吸光标
+- [x] 视频面板美化：内阴影、摄像头图标占位符
+- [x] 状态栏美化：磨砂玻璃、延迟颜色梯度
+- [x] 按钮美化：focus-visible、按下缩放、光晕
+- [x] 控制栏美化：磨砂玻璃效果
+- [x] 响应式布局：3 断点（768px / 480px / 600px 高度）
+- [x] 无障碍增强：aria-label、role、aria-live、prefers-reduced-motion
+- [x] 文档更新：dev-logs、INDEX.md、requirements.md、CLAUDE.md
+- [x] 新建 docs/design-system.md
+
+### 验证标准
+
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ `npm run build` 构建成功
+- ✅ `uv run python -c "from app.main import app"` 无报错
+- ✅ `uv run pytest tests/ -v` 31/31 全绿
+- ✅ 视觉一致：暗色主题、布局不变
+- ✅ CSS 变量可通过浏览器 DevTools 修改
+- ✅ 所有交互状态正常（hover/active/disabled/focus-visible）
+- ✅ 响应式断点自适应（768px / 480px）
+- ✅ Tab 键可遍历所有交互元素
+- ✅ prefers-reduced-motion 关闭动画

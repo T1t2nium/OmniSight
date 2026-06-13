@@ -100,7 +100,7 @@ export function ChatLog({ messages }: ChatLogProps) {
   }, [messages]);
 
   return (
-    <div className="chat-log">
+    <div className="chat-log" role="log" aria-live="polite" aria-label="Conversation messages">
       {messages.length === 0 && (
         <div className="chat-empty">
           Start a conversation to see messages here...
