@@ -154,7 +154,7 @@ class PiperTTS:
 
         # Quick smoke test with a tiny synthesis
         try:
-            await self.synthesize(".")
+            await self.synthesize("好")  # single Chinese char, safe for all voices
         except PiperTTSError:
             raise
         except Exception as exc:
