@@ -18,7 +18,7 @@ from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.conversation import ConversationOrchestrator
 from app.services.tts import PiperTTS, PiperTTSError
-from app.services.kokoro_tts import KokoroTTS, KokoroTTSError
+from app.services.sherpa_tts import SherpaTTS, SherpaTTSError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,30 +64,26 @@ async def lifespan(app: FastAPI):
             settings.ollama_model,
         )
 
-    # Initialize TTS engine (kokoro → piper → browser fallback chain)
+    # Initialize TTS engine (sherpa → piper → browser fallback chain)
     tts = None
-    if settings.tts_backend == "kokoro":
+    if settings.tts_backend == "sherpa":
         try:
-            kokoro_tts = KokoroTTS(
-                model_path=settings.kokoro_model_path,
-                voices_path=settings.kokoro_voices_path,
-                voice=settings.kokoro_voice,
-                speed=settings.kokoro_speed,
-                lang=settings.kokoro_lang,
+            sherpa_tts = SherpaTTS(
+                model_dir=settings.sherpa_model_dir,
+                speed=settings.sherpa_speed,
+                num_threads=settings.sherpa_num_threads,
             )
-            await kokoro_tts.initialize()
-            tts = kokoro_tts
+            await sherpa_tts.initialize()
+            tts = sherpa_tts
             logger.info(
-                "Kokoro TTS ready (voice=%s, voices=%d, 24000 Hz)",
-                settings.kokoro_voice,
-                len(kokoro_tts.voices),
+                "sherpa-onnx TTS ready (matcha-icefall-zh-baker, 22050 Hz)"
             )
-        except KokoroTTSError as exc:
+        except SherpaTTSError as exc:
             logger.warning(
-                "Kokoro TTS unavailable — trying Piper fallback. Error: %s", exc,
+                "sherpa-onnx TTS unavailable — trying Piper fallback. Error: %s", exc,
             )
             # Fall through to Piper
-    if tts is None and settings.tts_backend in ("kokoro", "piper"):
+    if tts is None and settings.tts_backend in ("sherpa", "piper"):
         try:
             piper_tts = PiperTTS(
                 executable=settings.piper_executable,

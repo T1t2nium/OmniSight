@@ -69,8 +69,7 @@ uv sync                  # 按 pyproject.toml 同步依赖
 | **faster-whisper** | 语音转文字 | CTranslate2 加速，比 OpenAI Whisper 快 4x，支持 CPU |
 | **torch** | PyTorch 运行时 | faster-whisper 依赖，模型推理 |
 | **piper-tts** (后备) | 本地 TTS（后备选项） | ONNX Runtime，Windows 兼容，轻量 |
-| **kokoro-onnx** (默认) | 本地 TTS（默认引擎） | Kokoro 82M ONNX，100+ 中文音色，Apache 2.0 |
-| **soundfile** | 音频文件读写 | kokoro-onnx 依赖 |
+| **sherpa-onnx** (默认) | 本地 TTS（默认引擎） | matcha-icefall-zh-baker，内置中文 FST+词典，Apache 2.0 |
 
 ### 可选云端备选
 

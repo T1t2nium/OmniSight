@@ -18,7 +18,7 @@ import numpy as np
 from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.tts import PiperTTS, split_sentences
-from app.services.kokoro_tts import KokoroTTS
+from app.services.sherpa_tts import SherpaTTS
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class ConversationOrchestrator:
         self,
         transcriber: AudioTranscriber,
         ollama: OllamaClient,
-        tts: PiperTTS | KokoroTTS | None = None,
+        tts: PiperTTS | SherpaTTS | None = None,
     ) -> None:
         self._transcriber = transcriber
         self._ollama = ollama
@@ -57,10 +57,10 @@ class ConversationOrchestrator:
 
     @property
     def tts_provider(self) -> str:
-        """Return 'kokoro', 'piper', or 'browser' so the frontend knows what to expect."""
+        """Return 'sherpa', 'piper', or 'browser' so the frontend knows what to expect."""
         if self._tts and self._tts.ready:
-            if isinstance(self._tts, KokoroTTS):
-                return "kokoro"
+            if isinstance(self._tts, SherpaTTS):
+                return "sherpa"
             return "piper"
         return "browser"
 

@@ -14,7 +14,7 @@
 | 4 | `phase/4-tts-interrupt` | Piper TTS + 用户打断机制 ✅ | PR 3 |
 | 5 | `phase/5-polish` | 健壮性、性能优化、测试 ✅ | PR 4 |
 | 6 | `phase/6-ui-polish` | 前端 UI 美化：设计系统基础 ✅ | PR 5 |
-| 7 | `phase/7-kokoro-tts` | TTS 质量升级：Piper → Kokoro 82M ✅ | PR 4 |
+| 7 | `phase/7-kokoro-tts` | TTS 质量升级：Piper → sherpa-onnx ✅ | PR 4 |
 
 ---
 
