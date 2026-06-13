@@ -3,20 +3,27 @@ import { useRef, useEffect } from 'react';
 interface VideoPanelProps {
   stream: MediaStream | null;
   cameraEnabled: boolean;
+  /** Bumped on every track change — force re-bind (PR 5). */
+  streamVersion: number;
 }
 
-export function VideoPanel({ stream, cameraEnabled }: VideoPanelProps) {
+export function VideoPanel({ stream, cameraEnabled, streamVersion }: VideoPanelProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video && stream) {
-      video.srcObject = stream;
-      video.play().catch(() => {
-        // Browser may block autoplay; user gesture resolves this
-      });
+    if (!video) return;
+
+    if (!stream || !cameraEnabled) {
+      video.srcObject = null;
+      return;
     }
-  }, [stream]);
+
+    // Force Chrome to re-evaluate tracks by briefly nulling srcObject.
+    video.srcObject = null;
+    video.srcObject = stream;
+    video.play().catch(() => {});
+  }, [stream, cameraEnabled, streamVersion]);
 
   if (!cameraEnabled || !stream) {
     return (

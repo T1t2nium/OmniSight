@@ -1,8 +1,14 @@
-"""Connection state manager — tracks active WebSocket sessions with thread safety."""
+"""Connection state manager — tracks active WebSocket sessions with thread safety.
+
+PR 5: Added background cleanup task for stale session removal.
+"""
 
 import time
 import asyncio
+import logging
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,6 +38,8 @@ class ConnectionStateManager:
     def __init__(self) -> None:
         self._sessions: dict[str, SessionState] = {}
         self._lock = asyncio.Lock()
+        self._cleanup_task: asyncio.Task | None = None
+        self._idle_timeout: float = 300.0  # default, overridden by config
 
     async def register(self, session_id: str) -> SessionState:
         """Create and store a new session. Returns the state object."""
@@ -80,6 +88,11 @@ class ConnectionStateManager:
         async with self._lock:
             return list(self._sessions.keys())
 
+    async def get_session_count(self) -> int:
+        """Return number of active sessions."""
+        async with self._lock:
+            return len(self._sessions)
+
     # ---- PR 3: vision frame + AI status ----
 
     async def set_latest_frame(self, session_id: str, frame_b64: str) -> None:
@@ -104,3 +117,50 @@ class ConnectionStateManager:
             state = self._sessions.get(session_id)
             if state:
                 state.ai_status = status
+
+    # ---- PR 5: stale session cleanup ----
+
+    def set_idle_timeout(self, seconds: float) -> None:
+        """Configure the idle timeout used by the cleanup task."""
+        self._idle_timeout = seconds
+
+    async def start_cleanup_task(self) -> None:
+        """Begin a periodic background task that removes idle sessions."""
+        if self._cleanup_task is not None:
+            return
+        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        logger.info(
+            "Session cleanup task started (idle_timeout=%.0fs, check every 30s)",
+            self._idle_timeout,
+        )
+
+    async def stop_cleanup_task(self) -> None:
+        """Cancel the background cleanup task (call at shutdown)."""
+        if self._cleanup_task is None:
+            return
+        self._cleanup_task.cancel()
+        try:
+            await self._cleanup_task
+        except asyncio.CancelledError:
+            pass
+        self._cleanup_task = None
+        logger.info("Session cleanup task stopped")
+
+    async def _cleanup_loop(self) -> None:
+        """Scan every 30s and remove sessions idle for > idle_timeout."""
+        while True:
+            await asyncio.sleep(30)
+            now = time.time()
+            stale: list[str] = []
+            async with self._lock:
+                for sid, state in self._sessions.items():
+                    if now - state.last_activity > self._idle_timeout:
+                        stale.append(sid)
+                for sid in stale:
+                    del self._sessions[sid]
+            if stale:
+                logger.info(
+                    "Cleaned up %d stale session(s): %s",
+                    len(stale),
+                    ", ".join(sid[:8] for sid in stale),
+                )

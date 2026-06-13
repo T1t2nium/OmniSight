@@ -53,6 +53,17 @@ class Settings(BaseSettings):
     piper_model_config: str = ""  # Path to .onnx.json config file (auto-derived if empty)
     piper_speaker: int | None = None  # Speaker ID for multi-speaker voices
 
+    # ---- PR 5: Robustness settings ----
+
+    # WebSocket heartbeat
+    ws_ping_interval: int = 30     # seconds between server ping frames
+    ws_ping_timeout: int = 10      # seconds to wait for pong before disconnect
+    session_idle_timeout: int = 300  # 5 minutes idle → auto-session cleanup
+
+    # Motion detection
+    motion_detection_enabled: bool = True
+    motion_threshold: float = 15.0  # mean pixel diff threshold (0-255)
+
     @field_validator("piper_speaker", mode="before")
     @classmethod
     def _empty_to_none(cls, v: object) -> int | None:

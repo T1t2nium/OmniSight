@@ -31,6 +31,9 @@ Thumbs.db
 *.log
 debug_audio/
 
+# Piper binaries (download separately)
+backend/bin/
+
 # Models (download separately)
 backend/models/
 *.onnx

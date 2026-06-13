@@ -1,5 +1,6 @@
 """Ollama HTTP API client with NDJSON streaming support."""
 
+import asyncio
 import json
 import logging
 from typing import AsyncIterator
@@ -111,6 +112,25 @@ class OllamaClient:
         except Exception as exc:
             logger.warning("Ollama health check failed: %s", exc)
             return False
+
+    async def check_health_with_retry(
+        self, retries: int = 3, delay: float = 2.0
+    ) -> bool:
+        """Repeatedly call check_health until success or retries exhausted."""
+        for attempt in range(1, retries + 1):
+            ok = await self.check_health()
+            if ok:
+                return True
+            if attempt < retries:
+                logger.info(
+                    "Ollama health check attempt %d/%d failed — retrying in %.1fs",
+                    attempt, retries, delay,
+                )
+                await asyncio.sleep(delay)
+        logger.warning(
+            "Ollama health check failed after %d attempts", retries
+        )
+        return False
 
     async def close(self) -> None:
         """Clean shutdown of the underlying HTTP client."""

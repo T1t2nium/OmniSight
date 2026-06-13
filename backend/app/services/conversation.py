@@ -9,8 +9,10 @@ import asyncio
 import base64
 import logging
 import re
+import time
 from typing import Awaitable, Callable
 
+import httpx
 import numpy as np
 
 from app.services.transcriber import AudioTranscriber
@@ -100,11 +102,14 @@ class ConversationOrchestrator:
             )
 
             # ---- Step 4: Send transcript ----
+            t0 = time.perf_counter()
             await send_fn("transcript", {
                 "text": text,
                 "language": language,
                 "duration_ms": duration * 1000,
             })
+            t1 = time.perf_counter()
+            logger.debug("Timing: send transcript took %.3fs", t1 - t0)
 
             # ---- Step 5: Add user message to history ----
             history = history or []
@@ -116,6 +121,8 @@ class ConversationOrchestrator:
             # LLM streaming from TTS synthesis — the worker starts on the
             # first sentence while the LLM may still be generating later ones.
             await status_fn("speaking")
+            t2 = time.perf_counter()
+            logger.debug("Timing: setup before Ollama took %.3fs", t2 - t1)
             full_response = ""
             tts_pending_text = ""
 
@@ -139,23 +146,41 @@ class ConversationOrchestrator:
                 worker_task = asyncio.create_task(_tts_worker())
 
             try:
-                async for chunk in self._ollama.chat(
-                    text, image_base64=latest_frame_b64, history=history
-                ):
-                    full_response += chunk["delta"]
-                    tts_pending_text += chunk["delta"]
+                # PR 5: Retry once on transient Ollama errors
+                t3 = time.perf_counter()
+                logger.info(
+                    "Starting Ollama chat (image=%s, %.1f KB)",
+                    "yes" if latest_frame_b64 else "no",
+                    len(latest_frame_b64) / 1024 if latest_frame_b64 else 0,
+                )
+                for attempt in range(2):
+                    try:
+                        async for chunk in self._ollama.chat(
+                            text, image_base64=latest_frame_b64, history=history
+                        ):
+                            full_response += chunk["delta"]
+                            tts_pending_text += chunk["delta"]
 
-                    await send_fn("llm_response", {
-                        "delta": chunk["delta"],
-                        "done": chunk["done"],
-                        "total_duration": chunk.get("total_duration", 0.0),
-                    })
+                            await send_fn("llm_response", {
+                                "delta": chunk["delta"],
+                                "done": chunk["done"],
+                                "total_duration": chunk.get("total_duration", 0.0),
+                            })
 
-                    # Push complete sentences to TTS worker (non-blocking)
-                    if tts_ready:
-                        sentences, tts_pending_text = split_sentences(tts_pending_text)
-                        for s in sentences:
-                            await tts_queue.put(s)
+                            # Push complete sentences to TTS worker (non-blocking)
+                            if tts_ready:
+                                sentences, tts_pending_text = split_sentences(tts_pending_text)
+                                for s in sentences:
+                                    await tts_queue.put(s)
+                        break  # Success — exit retry loop
+                    except (httpx.TimeoutException, httpx.ConnectError) as e:
+                        if attempt == 0:
+                            logger.warning(
+                                "Ollama transient error — retrying in 1s: %s", e
+                            )
+                            await asyncio.sleep(1)
+                        else:
+                            raise  # Final attempt failed — propagate
 
                 # ---- Step 7: Flush remaining text + wait for TTS ----
                 if tts_ready:
@@ -186,7 +211,9 @@ class ConversationOrchestrator:
         except Exception as exc:
             logger.exception("AI pipeline error")
             await send_fn("error", {"message": f"AI error: {exc}"})
-            raise AIPipelineError(str(exc)) from exc
+            # PR 5: do NOT re-raise — the outer asyncio.create_task has no
+            # await-er, so the exception would only surface as an unhandled
+            # Task exception in logs. The error message above is sufficient.
         finally:
             await status_fn("idle")
 

@@ -41,8 +41,13 @@ function App() {
     stopPlayback,
     isSpeaking: aiSpeaking,
   } = useAudioPlayer();
+  // PR 5: refs for latest state (used in keyboard handler to avoid stale closures)
+  const conversationActiveRef = useRef(conversationActive);
+  conversationActiveRef.current = conversationActive;
+  const aiSpeakingRef = useRef(aiSpeaking);
+  aiSpeakingRef.current = aiSpeaking;
   const vad = useVAD({
-    stream: media.stream,
+    stream: media.vadStream,
     sessionId: sessionIdRef.current,
     sendMessage: ws.send,
     enabled: conversationActive && media.micEnabled,
@@ -228,6 +233,45 @@ function App() {
     ttsProviderRef.current = 'browser';
   }, [media]);
 
+  // ---- PR 5: Keyboard shortcuts ----
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when user is typing in an input or textarea
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // Space: toggle microphone
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (conversationActiveRef.current) {
+          media.toggleMic();
+        }
+        return;
+      }
+
+      // Escape: interrupt AI speech, or stop conversation if idle
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (aiSpeakingRef.current) {
+          // Barge-in: stop audio + notify backend
+          stopPlaybackRef.current();
+          ws.send({
+            type: 'vad_event',
+            session_id: sessionIdRef.current,
+            timestamp: Date.now() / 1000,
+            payload: { event: 'speech_start' },
+          });
+        } else if (conversationActiveRef.current) {
+          handleStopConversation();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [media.toggleMic, ws.send, handleStopConversation]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -240,6 +284,7 @@ function App() {
           <VideoPanel
             stream={media.stream}
             cameraEnabled={media.cameraEnabled}
+            streamVersion={media.streamVersion}
           />
         </div>
 
@@ -256,7 +301,11 @@ function App() {
               {(totalAudioMs / 1000).toFixed(1)}s
             </span>
           )}
-          <ConnectionStatus state={ws.connectionState} />
+          <ConnectionStatus
+            state={ws.connectionState}
+            latencyMs={ws.latencyMs}
+            reconnectAttempt={ws.reconnectAttempt}
+          />
           {media.error && <span className="media-error">{media.error}</span>}
           {vad.vadError && (
             <span className="vad-error">VAD: {vad.vadError}</span>

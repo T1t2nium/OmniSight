@@ -145,6 +145,8 @@ export function useVAD({ stream, sessionId, sendMessage, enabled }: UseVADOption
 
     return () => {
       cancelled = true;
+      // PR 5: destroy() is safe now — VAD gets an isolated audio-only
+      // stream, so destroying it won't touch video tracks.
       vadRef.current?.destroy();
       vadRef.current = null;
       setVadReady(false);

@@ -408,3 +408,42 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 0.85rem;
 }
+
+/* ===== PR 5: ErrorBoundary ===== */
+
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.error-boundary h2 {
+  color: #da3633;
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.error-boundary-detail {
+  color: #8b949e;
+  max-width: 480px;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ===== PR 5: Latency Indicator ===== */
+
+.latency-indicator {
+  font-size: 0.7rem;
+  color: #58a6ff;
+  margin-left: 6px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  white-space: nowrap;
+}
