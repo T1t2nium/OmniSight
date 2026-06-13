@@ -18,6 +18,7 @@ from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.conversation import ConversationOrchestrator
 from app.services.tts import PiperTTS, PiperTTSError
+from app.services.kokoro_tts import KokoroTTS, KokoroTTSError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,9 +64,30 @@ async def lifespan(app: FastAPI):
             settings.ollama_model,
         )
 
-    # Initialize Piper TTS (optional — graceful fallback to browser TTS)
-    piper_tts: PiperTTS | None = None
-    if settings.tts_backend == "piper":
+    # Initialize TTS engine (kokoro → piper → browser fallback chain)
+    tts = None
+    if settings.tts_backend == "kokoro":
+        try:
+            kokoro_tts = KokoroTTS(
+                model_path=settings.kokoro_model_path,
+                voices_path=settings.kokoro_voices_path,
+                voice=settings.kokoro_voice,
+                speed=settings.kokoro_speed,
+                lang=settings.kokoro_lang,
+            )
+            await kokoro_tts.initialize()
+            tts = kokoro_tts
+            logger.info(
+                "Kokoro TTS ready (voice=%s, voices=%d, 24000 Hz)",
+                settings.kokoro_voice,
+                len(kokoro_tts.voices),
+            )
+        except KokoroTTSError as exc:
+            logger.warning(
+                "Kokoro TTS unavailable — trying Piper fallback. Error: %s", exc,
+            )
+            # Fall through to Piper
+    if tts is None and settings.tts_backend in ("kokoro", "piper"):
         try:
             piper_tts = PiperTTS(
                 executable=settings.piper_executable,
@@ -74,18 +96,20 @@ async def lifespan(app: FastAPI):
                 speaker=settings.piper_speaker,
             )
             await piper_tts.initialize()
+            tts = piper_tts
             logger.info(
                 "Piper TTS ready (voice=%s, sample_rate=%d Hz)",
                 settings.piper_model, piper_tts.sample_rate,
             )
         except PiperTTSError as exc:
             logger.warning(
-                "Piper TTS unavailable — falling back to browser SpeechSynthesis. "
+                "Piper TTS also unavailable — falling back to browser SpeechSynthesis. "
                 "Error: %s", exc,
             )
-            piper_tts = None
+    if tts is None:
+        logger.info("TTS: using browser SpeechSynthesis (no local engine available)")
 
-    orchestrator = ConversationOrchestrator(transcriber, ollama, piper_tts)
+    orchestrator = ConversationOrchestrator(transcriber, ollama, tts)
 
     # Store in app.state for route handlers
     # PR 5: Configure and start stale session cleanup
@@ -96,7 +120,7 @@ async def lifespan(app: FastAPI):
     app.state.transcriber = transcriber
     app.state.ollama = ollama
     app.state.orchestrator = orchestrator
-    app.state.tts = piper_tts
+    app.state.tts = tts
 
     yield
 
@@ -108,7 +132,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OmniSight",
-    version="0.4.0",
+    version="0.5.0",
     description="AI Visual Conversation Assistant Backend",
     lifespan=lifespan,
 )
@@ -134,7 +158,7 @@ async def health(request: Request):
     active_sessions = await state_manager.get_session_count()
     return {
         "status": "ok",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "ollama_available": ollama_ok,
         "active_sessions": active_sessions,
         "uptime_seconds": round(time.time() - _start_time, 1),

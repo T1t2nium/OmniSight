@@ -68,7 +68,9 @@ uv sync                  # 按 pyproject.toml 同步依赖
 | **Ollama** | 本地模型运行器 | Windows 原生支持，HTTP API，自动管理模型 |
 | **faster-whisper** | 语音转文字 | CTranslate2 加速，比 OpenAI Whisper 快 4x，支持 CPU |
 | **torch** | PyTorch 运行时 | faster-whisper 依赖，模型推理 |
-| **piper-tts** (可选) | 本地 TTS | ONNX Runtime，Windows 兼容，轻量 |
+| **piper-tts** (后备) | 本地 TTS（后备选项） | ONNX Runtime，Windows 兼容，轻量 |
+| **kokoro-onnx** (默认) | 本地 TTS（默认引擎） | Kokoro 82M ONNX，100+ 中文音色，Apache 2.0 |
+| **soundfile** | 音频文件读写 | kokoro-onnx 依赖 |
 
 ### 可选云端备选
 

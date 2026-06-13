@@ -45,13 +45,20 @@ class Settings(BaseSettings):
     vision_enabled: bool = True  # Set to False for text-only mode (faster on CPU)
 
     # TTS
-    tts_backend: Literal["browser", "piper"] = "piper"
+    tts_backend: Literal["browser", "piper", "kokoro"] = "kokoro"
 
-    # Piper TTS (local ONNX-based TTS engine)
+    # Piper TTS (local ONNX-based TTS engine — fallback option)
     piper_executable: str = "piper"  # Path to piper executable (or "piper" if on PATH)
     piper_model: str = ""  # Path to .onnx voice model file
     piper_model_config: str = ""  # Path to .onnx.json config file (auto-derived if empty)
     piper_speaker: int | None = None  # Speaker ID for multi-speaker voices
+
+    # Kokoro 82M TTS (local ONNX-based TTS engine — default, best quality)
+    kokoro_model_path: str = ""  # Path to .onnx model file
+    kokoro_voices_path: str = ""  # Path to voices-v1.0.bin embeddings
+    kokoro_voice: str = "zf_xiaobei"  # Default Chinese voice
+    kokoro_speed: float = 1.0  # Speech speed (0.5–2.0)
+    kokoro_lang: str = "zh"  # espeak-ng language code for G2P
 
     # ---- PR 5: Robustness settings ----
 

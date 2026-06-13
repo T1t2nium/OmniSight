@@ -14,6 +14,7 @@
 | 2026-06-13 | PR 4 — TTS 升级 + 打断机制 ✅ | [2026-06-13-pr4-tts-interrupt.md](2026-06-13-pr4-tts-interrupt.md) |
 | 2026-06-13 | PR 5 — 健壮性与体验优化 ✅ | [2026-06-13-pr5-polish.md](2026-06-13-pr5-polish.md) |
 | 2026-06-13 | PR 6 — 前端 UI 美化：设计系统基础 ✅ | [2026-06-13-pr6-ui-polish.md](2026-06-13-pr6-ui-polish.md) |
+| 2026-06-13 | PR 7 — TTS 质量升级：Piper → Kokoro 82M ✅ | [2026-06-13-pr7-kokoro-tts.md](2026-06-13-pr7-kokoro-tts.md) |
 
 ---
 
