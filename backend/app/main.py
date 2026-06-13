@@ -1,7 +1,13 @@
 """OmniSight Backend - AI Visual Conversation Assistant."""
 
+import sys
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+
+# Windows requires ProactorEventLoop for asyncio subprocess support
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +16,7 @@ from app.routes.ws import router as ws_router
 from app.services.transcriber import AudioTranscriber
 from app.services.ollama_client import OllamaClient
 from app.services.conversation import ConversationOrchestrator
+from app.services.tts import PiperTTS, PiperTTSError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,13 +61,36 @@ async def lifespan(app: FastAPI):
             settings.ollama_model,
         )
 
-    orchestrator = ConversationOrchestrator(transcriber, ollama)
+    # Initialize Piper TTS (optional — graceful fallback to browser TTS)
+    piper_tts: PiperTTS | None = None
+    if settings.tts_backend == "piper":
+        try:
+            piper_tts = PiperTTS(
+                executable=settings.piper_executable,
+                model_path=settings.piper_model,
+                config_path=settings.piper_model_config,
+                speaker=settings.piper_speaker,
+            )
+            await piper_tts.initialize()
+            logger.info(
+                "Piper TTS ready (voice=%s, sample_rate=%d Hz)",
+                settings.piper_model, piper_tts.sample_rate,
+            )
+        except PiperTTSError as exc:
+            logger.warning(
+                "Piper TTS unavailable — falling back to browser SpeechSynthesis. "
+                "Error: %s", exc,
+            )
+            piper_tts = None
+
+    orchestrator = ConversationOrchestrator(transcriber, ollama, piper_tts)
 
     # Store in app.state for route handlers
     app.state.settings = settings
     app.state.transcriber = transcriber
     app.state.ollama = ollama
     app.state.orchestrator = orchestrator
+    app.state.tts = piper_tts
 
     yield
 
@@ -71,7 +101,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OmniSight",
-    version="0.2.0",
+    version="0.3.0",
     description="AI Visual Conversation Assistant Backend",
     lifespan=lifespan,
 )

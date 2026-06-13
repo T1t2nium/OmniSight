@@ -11,6 +11,7 @@
 | 2026-06-12 | 项目初始化与文档框架 ✅ | [2026-06-12-project-setup.md](2026-06-12-project-setup.md) |
 | 2026-06-12 | PR 2 — WebSocket 媒体流骨架 ✅ | [2026-06-12-pr2-ws-streaming.md](2026-06-12-pr2-ws-streaming.md) |
 | 2026-06-12 | PR 3 — 本地 AI 视觉对话核心 ✅ | [2026-06-12-pr3-local-ai-core.md](2026-06-12-pr3-local-ai-core.md) |
+| 2026-06-13 | PR 4 — TTS 升级 + 打断机制 ✅ | [2026-06-13-pr4-tts-interrupt.md](2026-06-13-pr4-tts-interrupt.md) |
 
 ---
 

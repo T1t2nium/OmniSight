@@ -11,6 +11,7 @@ dist/
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -28,6 +29,7 @@ Thumbs.db
 
 # Logs
 *.log
+debug_audio/
 
 # Models (download separately)
 backend/models/

@@ -102,18 +102,29 @@
 
 ### 任务清单
 
-- [ ] 后端：Piper TTS 集成
-- [ ] 后端：流式 TTS 输出
-- [ ] 后端：打断机制（interrupt flag + 生成取消）
-- [ ] 前端：PCM16 音频队列播放
-- [ ] 前端：打断触发 + 播放停止
-- [ ] 前端：AI 说话中状态指示
+- [x] 后端：PiperTTS 服务（asyncio 子进程封装，sentence-level synthesis）
+- [x] 后端：split_sentences 工具函数（中英文句边界检测）
+- [x] 后端：ConversationOrchestrator 集成 TTS（LLM 流式 → 逐句合成 → tts_audio）
+- [x] 后端：打断机制（speech_start → cancel pipeline → send interrupt）
+- [x] 后端：schemas 扩展（TTSAudioPayload, InterruptPayload）
+- [x] 后端：config + main.py lifespan 初始化（graceful fallback to browser TTS）
+- [x] 前端：useAudioPlayer 重写（PCM16 Web Audio API 队列播放 + SpeechSynthesis fallback）
+- [x] 前端：App.tsx 集成 TTS 音频 + interrupt 处理 + 本地 barge-in
+- [x] 前端：AudioIndicator 新增 AI 说话中状态（蓝色脉冲）
+- [x] 前端：ChatLog 处理新消息类型（tts_audio/interrupt 不渲染）
+- [x] 脚本：download-piper.ps1（下载 Piper exe + 中英文语音模型）
 
 ### 验证标准
 
-- Piper TTS 自然语音输出
-- 用户打断正常工作
-- 连续对话流畅
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ `npm run build` 构建成功
+- ✅ `uv run python -c "from app.main import app"` 导入成功（v0.3.0）
+- ✅ Piper TTS 自然语音输出（huayan-espeak 模型，22050Hz）
+- ✅ 用户打断正常工作（本地即时停止 + 服务端任务取消）
+- ✅ 无 Piper 时自动回退到浏览器 SpeechSynthesis
+- ✅ TTS 文字流式朗读（生产者-消费者队列，LLM 生成中即可开始播放）
+- ✅ 双声线问题已修复（tts_info 显式告知前端 TTS 提供方）
+- ✅ Markdown 格式字符朗读清洗（**、*、-、` 等）
 
 ---
 

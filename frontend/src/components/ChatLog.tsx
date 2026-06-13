@@ -7,6 +7,11 @@ interface ChatLogProps {
 
 function renderMessage(msg: WSMessage) {
   switch (msg.type) {
+    // PR 4: tts_audio and interrupt are handled by audio player, not displayed
+    case 'tts_audio':
+    case 'interrupt':
+      return null;
+
     case 'transcript': {
       const p = msg.payload as unknown as TranscriptPayload;
       return (

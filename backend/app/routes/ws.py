@@ -23,6 +23,7 @@ from app.models.schemas import (
     EchoPayload,
     ErrorPayload,
     AIStatusPayload,
+    InterruptPayload,
 )
 from app.models.state import ConnectionStateManager
 from app.services.audio import AudioBufferManager
@@ -156,13 +157,24 @@ async def _handle_video_frame(
 async def _handle_vad_event(
     ws: WebSocket, session_id: str, payload: dict
 ) -> None:
-    """Handle VAD events. On speech_end, launch the AI pipeline."""
+    """Handle VAD events. On speech_end, launch the AI pipeline.
+
+    PR 4: speech_start during active AI pipeline cancels it (barge-in).
+    """
     event = payload.get("event", "unknown")
     logger.info("VAD %s [%s]", event, session_id)
 
     if event == "speech_start":
         # Clear any residual audio from previous VAD cycle
         audio_manager.clear(session_id)
+
+        # Barge-in: cancel running AI pipeline + notify frontend to stop audio
+        existing = _running_tasks.get(session_id)
+        if existing and not existing.done():
+            existing.cancel()
+            logger.info("Interrupted AI pipeline for %s (barge-in)", session_id)
+            p = InterruptPayload(reason="user_interrupt")
+            await _send_message(ws, session_id, "interrupt", p.model_dump())
 
     if event == "speech_end":
         await _start_ai_pipeline(ws, session_id)
@@ -191,8 +203,11 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
         )
         return
 
-    # Get latest frame
-    latest_frame, _ = await state_manager.get_latest_frame(session_id)
+    # Get latest frame (only if vision is enabled in config)
+    settings = ws.app.state.settings
+    latest_frame = None
+    if settings.vision_enabled:
+        latest_frame, _ = await state_manager.get_latest_frame(session_id)
 
     # Get orchestrator from app state
     orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
