@@ -119,9 +119,12 @@
 - ✅ `npx tsc --noEmit` 零错误
 - ✅ `npm run build` 构建成功
 - ✅ `uv run python -c "from app.main import app"` 导入成功（v0.3.0）
-- ⬜ Piper TTS 自然语音输出（需下载模型后验证）
-- ⬜ 用户打断正常工作（需启动服务后验证）
-- ⬜ 无 Piper 时自动回退到浏览器 SpeechSynthesis
+- ✅ Piper TTS 自然语音输出（huayan-espeak 模型，22050Hz）
+- ✅ 用户打断正常工作（本地即时停止 + 服务端任务取消）
+- ✅ 无 Piper 时自动回退到浏览器 SpeechSynthesis
+- ✅ TTS 文字流式朗读（生产者-消费者队列，LLM 生成中即可开始播放）
+- ✅ 双声线问题已修复（tts_info 显式告知前端 TTS 提供方）
+- ✅ Markdown 格式字符朗读清洗（**、*、-、` 等）
 
 ---
 
