@@ -285,6 +285,9 @@ _TTS_REPLACEMENTS: list[tuple[re.Pattern, str]] = [
     # HTML/markdown remnants
     (re.compile(r"<[^>]+>"), ""),   # <tag>
     (re.compile(r"`{1,3}[^`]*`{1,3}"), ""),  # `code` or ```block```
+    # Strip unwanted characters before they reach the TTS engine
+    (re.compile(r"："), ""),    # fullwidth colon — not pronounceable
+    (re.compile(r"[-—–]"), ""),  # dashes (hyphen, em-dash, en-dash)
     # Multiple spaces → single space
     (re.compile(r" {2,}"), " "),
     # Repeated punctuation cleanup
