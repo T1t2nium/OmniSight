@@ -72,7 +72,7 @@ class ConversationOrchestrator:
         history: list[dict] | None,
         send_fn: Callable[[str, dict], Awaitable[None]],
         status_fn: Callable[[str], Awaitable[None]],
-    ) -> None:
+    ) -> list[dict]:
         """Run the full AI pipeline on a single user utterance.
 
         Steps:
@@ -83,6 +83,9 @@ class ConversationOrchestrator:
         5. Stream Ollama response as llm_response deltas, detect sentences
         6. Concurrent TTS synthesis for collected sentences
         7. Send 'idle' status on completion
+
+        Returns:
+            Updated conversation history for the next turn.
         """
         await status_fn("thinking")
 
@@ -221,6 +224,8 @@ class ConversationOrchestrator:
             # Task exception in logs. The error message above is sufficient.
         finally:
             await status_fn("idle")
+
+        return history
 
     async def _synthesize_and_send(
         self, text: str, send_fn: Callable[[str, dict], Awaitable[None]],

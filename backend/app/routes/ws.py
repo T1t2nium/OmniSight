@@ -265,23 +265,42 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
         p = AIStatusPayload(status=status)
         await _send_message(ws, session_id, "ai_status", p.model_dump())
 
+    # PR 8: load existing conversation history from session state
+    session = await state_manager.get(session_id)
+    history: list[dict] = session.history.copy() if session and session.history else []
+
     task = asyncio.create_task(
         orchestrator.process_utterance(
             pcm_bytes=pcm_bytes,
             sample_rate=16000,
             latest_frame_b64=latest_frame,
-            history=None,  # PR 5 adds multi-turn history
+            history=history,
             send_fn=send_msg,
             status_fn=send_status,
         )
     )
     _running_tasks[session_id] = task
 
+    # PR 8: save updated history back to session state when pipeline completes
+    async def _save_history(t: asyncio.Task) -> None:
+        try:
+            updated = t.result()
+            if updated:
+                s = await state_manager.get(session_id)
+                if s:
+                    s.history = updated
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
     def _cleanup(t: asyncio.Task) -> None:
         if _running_tasks.get(session_id) is t:
             _running_tasks.pop(session_id, None)
 
-    task.add_done_callback(_cleanup)
+    task.add_done_callback(
+        lambda t: (_cleanup(t), asyncio.create_task(_save_history(t)))
+    )
 
 
 # ---- WAV Parser ----
