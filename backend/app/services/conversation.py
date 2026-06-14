@@ -382,8 +382,8 @@ _TTS_ALLOWED_BLOCKS = []  # kept for backward compat, unused
 
 # Chinese keywords that indicate the user wants visual analysis
 _VISUAL_KEYWORDS = re.compile(
-    r"我.{0,3}(看|穿|拿|戴|手|身上|旁边|后面|前面|周围|这边|那边|这里|那里)"
-    r"|什么.{0,3}(颜色|样|东西|玩意)"
+    r"我.{0,3}(看|穿|拿|戴|做|干|弄|举|挥|指|动|手|身上|旁边|后面|前面|周围|这边|那边|这里|那里)"
+    r"|什么.{0,3}(颜色|样|东西|玩意|动作)"
     r"|看看|看到|看清|看下|看一下|瞅|瞄"
     r"|我的.{0,3}(脸|头发|衣服|眼镜|手表|项链|耳环)"
     r"|这是|这是啥|这是什么|那是什么|那是啥"
