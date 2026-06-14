@@ -47,6 +47,19 @@
   --color-btn-stop-bg: #ef4444;
   --color-btn-stop-border: #f87171;
 
+  /* Glass button tokens */
+  --color-glass-bg: rgba(255, 255, 255, 0.06);
+  --color-glass-bg-hover: rgba(255, 255, 255, 0.12);
+  --color-glass-border: rgba(255, 255, 255, 0.15);
+  --color-glass-border-hover: rgba(255, 255, 255, 0.25);
+  --color-glass-primary-tint: rgba(74, 222, 128, 0.15);
+  --color-glass-primary-glow: rgba(74, 222, 128, 0.25);
+  --color-glass-danger-tint: rgba(248, 113, 113, 0.15);
+  --color-glass-danger-glow: rgba(248, 113, 113, 0.25);
+  --color-glass-active-tint: rgba(74, 222, 128, 0.10);
+  --color-glass-active-border: rgba(74, 222, 128, 0.50);
+  --glass-blur: 14px;
+
   /* Chat bubbles */
   --color-bubble-user-bg: #1a3a2a;
   --color-bubble-user-border: #2d5a3d;

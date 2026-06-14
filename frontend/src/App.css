@@ -314,94 +314,132 @@ body {
   gap: var(--space-3);
 }
 
-.btn {
+/* ===== Glass Button ===== */
+
+.glass-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Frosted edge highlight ring */
+.glass-btn-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box,
+                linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glass-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-5);
-  border: 1px solid var(--color-border-hover);
+  border: 1px solid var(--color-glass-border);
   border-radius: var(--radius-full);
-  background: var(--color-bg-secondary);
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text-primary);
   font-size: var(--text-base);
   font-family: var(--font-sans);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   transform: scale(1);
   white-space: nowrap;
+  isolation: isolate;
+  box-shadow: var(--shadow-inner), 0 0 0 0 transparent;
 }
 
-.btn:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+.glass-btn:hover:not(:disabled) {
+  background: var(--color-glass-bg-hover);
+  border-color: var(--color-glass-border-hover);
+  transform: translateY(-2px);
 }
 
-.btn:active:not(:disabled) {
+.glass-btn:active:not(:disabled) {
   transform: scale(0.96);
 }
 
-.btn:focus-visible {
+.glass-btn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
 }
 
-.btn:disabled {
-  opacity: 0.35;
+.glass-btn:disabled {
+  opacity: 0.30;
   cursor: not-allowed;
 }
 
-.btn-start {
-  background: var(--color-btn-start-bg);
-  border-color: var(--color-btn-start-border);
-  color: #fff;
+/* Primary (Start) — green tint */
+.glass-btn--primary {
+  background: var(--color-glass-primary-tint);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: var(--color-success);
   font-weight: var(--font-weight-semibold);
-  box-shadow: 0 0 20px var(--color-btn-start-glow);
-  padding: var(--space-2) var(--space-6);
+  box-shadow: 0 0 20px var(--color-glass-primary-glow),
+              var(--shadow-inner);
 }
 
-.btn-start:hover:not(:disabled) {
-  background: #2dd46a;
-  border-color: #5ee895;
-  box-shadow: 0 0 30px rgba(34, 197, 94, 0.5);
-  transform: translateY(-2px);
+.glass-btn--primary:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 32px var(--color-glass-primary-glow),
+              var(--shadow-inner);
 }
 
-.btn-stop {
-  background: var(--color-btn-stop-bg);
-  border-color: var(--color-btn-stop-border);
-  color: #fff;
+/* Danger (Stop) — red tint */
+.glass-btn--danger {
+  background: var(--color-glass-danger-tint);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--color-error);
   font-weight: var(--font-weight-semibold);
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
-  padding: var(--space-2) var(--space-6);
+  box-shadow: 0 0 20px var(--color-glass-danger-glow),
+              var(--shadow-inner);
 }
 
-.btn-stop:hover:not(:disabled) {
-  background: #f15b5b;
-  border-color: #f98a8a;
-  box-shadow: 0 0 24px rgba(239, 68, 68, 0.4);
-  transform: translateY(-2px);
+.glass-btn--danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.55);
+  box-shadow: 0 0 32px var(--color-glass-danger-glow),
+              var(--shadow-inner);
 }
 
-.btn-active {
-  border-color: var(--color-success);
+/* Default (neutral) — inherits base glass styles */
+
+/* Active toggle — green accent */
+.glass-btn--active {
+  background: var(--color-glass-active-tint);
+  border-color: var(--color-glass-active-border);
   color: var(--color-success);
 }
 
-.btn-active:hover:not(:disabled) {
-  background: var(--color-success-soft);
+.glass-btn--active:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.65);
 }
 
-.btn-inactive {
-  border-color: var(--color-text-muted);
-  color: var(--color-text-muted);
-}
-
-.btn-inactive:hover:not(:disabled) {
-  color: var(--color-text-secondary);
-  border-color: var(--color-text-secondary);
+/* Fallback: hide gradient edge on browsers without mask-composite */
+@supports not (mask-composite: exclude) {
+  .glass-btn-wrapper::before {
+    display: none;
+  }
 }
 
 /* ===== Chat Log ===== */
@@ -789,13 +827,13 @@ body {
     padding: var(--space-3) var(--space-3);
   }
 
-  .btn {
+  .glass-btn {
     padding: var(--space-2) var(--space-3);
     font-size: var(--text-sm);
   }
 
-  .btn-start,
-  .btn-stop {
+  .glass-btn--primary,
+  .glass-btn--danger {
     padding: var(--space-2) var(--space-4);
   }
 }
@@ -837,13 +875,13 @@ body {
     font-size: 2.5rem;
   }
 
-  .btn {
+  .glass-btn {
     padding: var(--space-1) var(--space-3);
     font-size: var(--text-sm);
   }
 
-  .btn-start,
-  .btn-stop {
+  .glass-btn--primary,
+  .glass-btn--danger {
     padding: var(--space-2) var(--space-3);
     font-size: var(--text-sm);
   }
