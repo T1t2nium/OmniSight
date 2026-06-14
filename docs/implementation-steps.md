@@ -15,6 +15,8 @@
 | 5 | `phase/5-polish` | 健壮性、性能优化、测试 ✅ | PR 4 |
 | 6 | `phase/6-ui-polish` | 前端 UI 美化：设计系统基础 ✅ | PR 5 |
 | 7 | `phase/7-kokoro-tts` | TTS 质量升级：Piper → sherpa-onnx ✅ | PR 4 |
+| 8 | `phase/8-system-prompt` | 系统提示词 + 沉浸式对话体验 ✅ | PR 7 |
+| 9 | `phase/9-frontend-ui-final` | 前端 UI 终极优化：Canvas 背景 + 玻璃按钮 ✅ | PR 8 |
 
 ---
 
@@ -177,3 +179,85 @@
 - ✅ 响应式断点自适应（768px / 480px）
 - ✅ Tab 键可遍历所有交互元素
 - ✅ prefers-reduced-motion 关闭动画
+
+---
+
+## PR 7: TTS 质量升级 — Piper → sherpa-onnx
+
+### 任务清单
+
+- [x] 调研：诊断 espeak-ng 中文 G2P 根因（拼音→IPA 音节映射缺失）
+- [x] 替换引擎：Kokoro → sherpa-onnx（内置 FST + 词典，无运行时 espeak-ng）
+- [x] 新建 `sherpa_tts.py`：OfflineTts 封装（VITS/Matcha 模型自动检测）
+- [x] 修复 ORT DLL 版本不匹配（`_fix_onnxruntime_dll()` 自动替换）
+- [x] 模型下载脚本 `download-sherpa-tts.ps1`（vits-melo-tts-zh_en，163MB）
+- [x] 配置更新：`sherpa_model_dir`、`sherpa_speed`、`sherpa_num_threads`
+- [x] 三级降级链：sherpa → piper → browser
+- [x] PCM16 音频峰值归一化（85% target）
+- [x] 前端类型适配（TTSInfoPayload.provider: 'sherpa'）
+
+### 验证标准
+
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ `npm run build` 构建成功
+- ✅ 31/31 后端测试全绿
+- ✅ 中文语音清晰可懂，无口齿不清
+- ✅ 短句合成延迟 <300ms
+- ✅ Piper 后备引擎可正常切换
+
+---
+
+## PR 8: 系统提示词 + 沉浸式对话体验
+
+### 任务清单
+
+- [x] 新建 `prompts.py` — 集中管理系统提示词
+- [x] ollama_client 注入系统提示词 + 历史裁剪（最近 8 条消息）
+- [x] SessionState 添加 `history` 字段持久化多轮对话
+- [x] conversation.py 返回更新后的对话历史
+- [x] ws.py 线程安全的历史保存（`call_soon_threadsafe`）
+- [x] 视觉问题检测 `_is_visual_question()`（后续禁用）
+- [x] 阿拉伯数字 → 中文转换（≤5 位，TTS 更清晰）
+- [x] TTS 文本过滤：Unicode 区块白名单 + Markdown 清洗
+- [x] 用户自定义系统提示词（视觉聊天伴侣 v2.1）
+
+### 验证标准
+
+- ✅ AI 回复不再出现"图片/上传/画面中"等割裂表述
+- ✅ 连续对话时 AI 能记住上文（多轮历史生效）
+- ✅ 无 emoji / Markdown 格式泄漏到 TTS
+- ✅ 31/31 后端测试全绿
+
+---
+
+## PR 9: 前端 UI 终极优化 — Canvas 背景 + 玻璃按钮
+
+### 任务清单
+
+- [x] 新建 `NeuralBackground.tsx`：Canvas 流场粒子背景
+  - 600 个粒子沿 cos/sin 角度场运动
+  - 鼠标排斥交互（150px 半径）
+  - 拖尾覆层颜色读取 `--color-bg-primary` CSS 变量
+  - Retina 支持 + `prefers-reduced-motion` 回退
+  - 颜色随对话状态切换（idle/用户说话/AI 回复）
+- [x] 删除 `BackgroundAmbiance.tsx` + 呼吸灯 CSS（~170 行）
+- [x] 新建 `GlassButton.tsx`：磨砂玻璃按钮组件
+  - 3 种 Variant：primary(绿) / danger(红) / default(中性)
+  - Active 切换态
+  - backdrop-filter blur + 渐变边缘光环
+- [x] ControlBar 3 个 `<button>` → 3 个 `<GlassButton>`
+- [x] 新增 11 个 `--color-glass-*` 设计令牌
+- [x] 响应式断点适配（768px / 480px）
+- [x] 视觉关键词过滤修复：新增动作动词（做/干/举/挥/指/动）
+- [x] TTS 括号表情过滤：（微笑）（点头）等
+- [x] 禁用视觉关键词过滤，改由用户提示词控制
+
+### 验证标准
+
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ `npm run build` 构建成功
+- ✅ 31/31 后端测试全绿
+- ✅ Canvas 粒子背景流畅运行（零新增依赖）
+- ✅ 鼠标移动粒子排斥交互正常
+- ✅ 玻璃按钮磨砂效果 + 状态颜色切换正常
+- ✅ `prefers-reduced-motion` 动画停止
