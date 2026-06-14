@@ -109,12 +109,9 @@ class ConversationOrchestrator:
                 "Transcript [%s] (%.1fs): %s", language, duration, text[:200]
             )
 
-            # Only send the image if the user's question is explicitly visual.
-            # This prevents the model from describing the scene for non-visual
-            # questions like "how are you" or "tell me a joke".
-            if latest_frame_b64 and not _is_visual_question(text):
-                logger.info("Non-visual question — skipping image for '%s'", text[:80])
-                latest_frame_b64 = None
+            # Always send the camera frame when available (vision_enabled in config).
+            # The system prompt tells the model when to reference the visual context.
+            # (Visual-keyword filtering is disabled — user prefers prompt-side control.)
 
             # ---- Step 4: Send transcript ----
             t0 = time.perf_counter()
@@ -300,6 +297,11 @@ _TTS_REPLACEMENTS: list[tuple[re.Pattern, str]] = [
     # Strip unwanted characters before they reach the TTS engine
     (re.compile(r"："), ""),    # fullwidth colon — not pronounceable
     (re.compile(r"[-—–]"), ""),  # dashes (hyphen, em-dash, en-dash)
+    # Strip parenthetical emotion/action markers that sound awkward in TTS:
+    #   （微笑）（笑）（点头）（无奈）→ removed entirely
+    # Half-width parens with short Chinese content: (笑) (无奈) → removed
+    (re.compile(r"（[^）]{0,10}）"), ""),
+    (re.compile(r"\([^)]*[一-鿿][^)]{0,10}\)"), ""),
     # Multiple spaces → single space
     (re.compile(r" {2,}"), " "),
     # Repeated punctuation cleanup
