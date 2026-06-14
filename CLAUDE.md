@@ -19,6 +19,7 @@
 | 系统架构 | [docs/architecture.md](docs/architecture.md) | 架构图与数据流 |
 | 实施步骤 | [docs/implementation-steps.md](docs/implementation-steps.md) | 分阶段任务清单 |
 | **设计系统** | **[docs/design-system.md](docs/design-system.md)** | **CSS 变量、颜色、间距、字体、组件规范** |
+| 设计回顾 | **[docs/design-review.md](docs/design-review.md)** | **用户故事实现对照 + 成本控制** |
 | 开发日志 | [dev-logs/INDEX.md](dev-logs/INDEX.md) | 日志索引 |
 | 编码规范 | [.claude/rules/coding_rule.md](.claude/rules/coding_rule.md) | LLM 编码行为指南 |
 | PR 规范 | [.claude/rules/commit_pr_rule.md](.claude/rules/commit_pr_rule.md) | 分支/PR/Commit 规范 |
