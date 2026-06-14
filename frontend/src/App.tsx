@@ -4,7 +4,7 @@ import { AudioIndicator } from './components/AudioIndicator';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ControlBar } from './components/ControlBar';
 import { ChatLog } from './components/ChatLog';
-import { BackgroundAmbiance, type AmbianceState } from './components/BackgroundAmbiance';
+import NeuralBackground from './components/NeuralBackground';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useVAD } from './hooks/useVAD';
@@ -61,12 +61,12 @@ function App() {
     enabled: conversationActive && media.cameraEnabled,
   });
 
-  // ---- Background ambiance: light color follows conversation state ----
-  const ambianceState: AmbianceState = useMemo(() => {
-    if (!conversationActive) return 'idle';
-    if (vad.isSpeaking) return 'user-speaking';
-    if (aiSpeaking) return 'ai-speaking';
-    return 'idle';
+  // ---- Background ambiance: particle color follows conversation state ----
+  const ambianceColor = useMemo(() => {
+    if (!conversationActive) return '#6366f1';  // indigo
+    if (vad.isSpeaking) return '#fbbf24';        // amber-gold
+    if (aiSpeaking) return '#a78bfa';            // purple
+    return '#6366f1';                            // indigo
   }, [conversationActive, vad.isSpeaking, aiSpeaking]);
 
   // PR 4: Immediately stop AI audio when user starts speaking (local barge-in).
@@ -283,8 +283,11 @@ function App() {
 
   return (
     <>
-      <BackgroundAmbiance state={ambianceState} enabled={conversationActive} />
-      <div className="bg-ambiance-noise" aria-hidden="true" />
+      <NeuralBackground
+        color={ambianceColor}
+        trailOpacity={0.12}
+        speed={0.8}
+      />
       <div className="app">
         <header className="app-header">
         <div className="app-logo" aria-hidden="true">◈</div>

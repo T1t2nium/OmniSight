@@ -22,111 +22,6 @@ body {
   overflow: hidden;
 }
 
-/* ===== Background Ambiance =====
- * Large breathing light orb + frosted glass texture.
- * Color driven by --ambiance-rgb CSS variable (set by BackgroundAmbiance component).
- * Default: soft teal-blue. Changes with conversation state.
- */
-
-:root {
-  --ambiance-rgb: 126, 184, 255;
-}
-
-.bg-ambiance {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-/* Main light orb — positioned at center-top, large and soft */
-.bg-ambiance::before {
-  content: '';
-  position: absolute;
-  top: -30%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(120vw, 1200px);
-  height: min(90vh, 900px);
-  border-radius: 50%;
-  background:
-    radial-gradient(
-      ellipse 70% 60% at 50% 40%,
-      rgba(var(--ambiance-rgb), 0.28) 0%,
-      rgba(var(--ambiance-rgb), 0.14) 30%,
-      rgba(var(--ambiance-rgb), 0.05) 55%,
-      transparent 100%
-    );
-  animation: breathe-orb 4s ease-in-out infinite;
-  transition: background 1.2s ease;
-  filter: blur(30px);
-}
-
-/* Secondary scattered light — wider, more diffuse */
-.bg-ambiance::after {
-  content: '';
-  position: absolute;
-  top: -10%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(160vw, 1600px);
-  height: min(110vh, 1100px);
-  border-radius: 50%;
-  background:
-    radial-gradient(
-      ellipse 60% 50% at 50% 35%,
-      rgba(var(--ambiance-rgb), 0.12) 0%,
-      rgba(var(--ambiance-rgb), 0.05) 40%,
-      transparent 100%
-    );
-  animation: breathe-orb-secondary 5s ease-in-out infinite;
-  transition: background 1.2s ease;
-  filter: blur(50px);
-}
-
-/* Noise texture overlay — frosted glass grain */
-.bg-ambiance-noise {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 256px 256px;
-}
-
-@keyframes breathe-orb {
-  0%, 100% {
-    opacity: 0.7;
-    transform: translateX(-50%) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: translateX(-50%) scale(1.06);
-  }
-}
-
-@keyframes breathe-orb-secondary {
-  0%, 100% {
-    opacity: 0.5;
-    transform: translateX(-50%) scale(1.03);
-  }
-  50% {
-    opacity: 0.85;
-    transform: translateX(-50%) scale(0.97);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bg-ambiance::before,
-  .bg-ambiance::after,
-  .video-panel {
-    animation: none;
-  }
-}
-
 /* ===== App Shell ===== */
 
 .app {
@@ -231,9 +126,9 @@ body {
 
 /* ===== Video Panel ===== */
 
-/* ===== Video Panel with breathing border glow =====
+/* ===== Video Panel with subtle static border glow =====
  * Box-shadow renders OUTSIDE the element — visible even with overflow:hidden.
- * The glow is driven by --ambiance-rgb (set by BackgroundAmbiance component).
+ * Uses a subtle indigo-blue accent glow.
  */
 
 .video-panel {
@@ -243,14 +138,12 @@ body {
   overflow: hidden;
   border: 1px solid var(--color-border);
   position: relative;
-  /* Static depth shadow + breathing glow ring */
+  /* Static depth shadow + subtle glow ring */
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.35),
-    0 0 20px rgba(var(--ambiance-rgb), 0.4),
-    0 0 55px rgba(var(--ambiance-rgb), 0.22),
-    0 0 95px rgba(var(--ambiance-rgb), 0.1);
-  animation: breathe-video-border 3.5s ease-in-out infinite;
-  transition: box-shadow 1.2s ease;
+    0 0 20px rgba(126, 184, 255, 0.15),
+    0 0 55px rgba(126, 184, 255, 0.08);
+  transition: box-shadow var(--transition-normal);
 }
 
 .video-panel::after {
@@ -260,23 +153,6 @@ body {
   border-radius: var(--radius-xl);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   pointer-events: none;
-}
-
-@keyframes breathe-video-border {
-  0%, 100% {
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.35),
-      0 0 20px rgba(var(--ambiance-rgb), 0.4),
-      0 0 55px rgba(var(--ambiance-rgb), 0.22),
-      0 0 95px rgba(var(--ambiance-rgb), 0.1);
-  }
-  50% {
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.35),
-      0 0 38px rgba(var(--ambiance-rgb), 0.55),
-      0 0 85px rgba(var(--ambiance-rgb), 0.32),
-      0 0 130px rgba(var(--ambiance-rgb), 0.16);
-  }
 }
 
 .video-preview {
