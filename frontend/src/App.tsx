@@ -4,12 +4,14 @@ import { AudioIndicator } from './components/AudioIndicator';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ControlBar } from './components/ControlBar';
 import { ChatLog } from './components/ChatLog';
+import { AgentSelector } from './components/AgentSelector';
 import NeuralBackground from './components/NeuralBackground';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useVAD } from './hooks/useVAD';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useFrameCapture } from './hooks/useFrameCapture';
+import { useAgent } from './hooks/useAgent';
 import type {
   WSMessage,
   LLMResponsePayload,
@@ -60,6 +62,9 @@ function App() {
     sendMessage: ws.send,
     enabled: conversationActive && media.cameraEnabled,
   });
+
+  // PR 11: Agent selection
+  const agent = useAgent(ws.send, ws.onMessage, sessionIdRef.current);
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -293,6 +298,13 @@ function App() {
         <div className="app-logo" aria-hidden="true">◈</div>
         <h1>OmniSight</h1>
         <span className="app-subtitle">AI Vision</span>
+        <div className="app-header__agent">
+          <AgentSelector
+            agents={agent.agents}
+            selectedAgentId={agent.selectedAgentId}
+            onSelect={agent.selectAgent}
+          />
+        </div>
       </header>
 
       <main className="app-main">

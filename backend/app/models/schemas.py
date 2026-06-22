@@ -106,3 +106,26 @@ class InterruptPayload(BaseModel):
     """Sent by server to confirm AI generation has been interrupted."""
 
     reason: str = "user_interrupt"
+
+
+# ---- PR 11: Agent Payloads (Server → Client & Client → Server) ----
+
+
+class AgentInfo(BaseModel):
+    """Lightweight agent metadata sent to frontend."""
+
+    agent_id: str
+    name: str
+    description: str
+
+
+class AgentListPayload(BaseModel):
+    """Sent by server on session start — list of available agents."""
+
+    agents: list[AgentInfo]
+
+
+class AgentSelectPayload(BaseModel):
+    """Sent by client to switch the active agent for this session."""
+
+    agent_id: str

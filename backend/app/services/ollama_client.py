@@ -47,6 +47,7 @@ class OllamaClient(BaseAIClient):
         transcript: str,
         image_base64: str | None = None,
         history: list[dict] | None = None,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[dict]:
         """Stream a chat completion from Ollama.
 
@@ -54,6 +55,8 @@ class OllamaClient(BaseAIClient):
             transcript: The user's transcribed speech text.
             image_base64: Optional base64-encoded JPEG for vision models.
             history: Previous conversation messages for multi-turn context.
+            system_prompt: Optional system prompt override. Falls back to
+                the default SYSTEM_PROMPT if not provided.
 
         Yields:
             dict with keys:
@@ -65,8 +68,9 @@ class OllamaClient(BaseAIClient):
         """
         from app.services.prompts import SYSTEM_PROMPT
 
-        # Always prepend system prompt
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        # Use provided system prompt or fall back to default
+        prompt = system_prompt or SYSTEM_PROMPT
+        messages = [{"role": "system", "content": prompt}]
         if history:
             # Keep only the last 4 exchanges (8 messages) to prevent
             # context drift where the model forgets the system prompt

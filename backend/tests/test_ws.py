@@ -44,7 +44,7 @@ def _make_audio_chunk(session_id: str, wav_data: bytes) -> dict:
 
 
 def test_session_lifecycle():
-    """Connect → receive server_status → disconnect → session cleaned."""
+    """Connect → receive server_status → agent_list → echo → disconnect."""
     client = TestClient(app)
     with client.websocket_connect("/ws") as ws:
         sid = f"test-life-{uuid.uuid4().hex[:8]}"
@@ -56,6 +56,10 @@ def test_session_lifecycle():
         resp = ws.receive_json()
         assert resp["type"] == "server_status"
         assert resp["payload"]["status"] == "connected"
+
+        # PR 11: agent_list sent after registration
+        resp_agent = ws.receive_json()
+        assert resp_agent["type"] == "agent_list"
 
         # Then echo for vad_event
         resp2 = ws.receive_json()
@@ -69,13 +73,14 @@ def test_unknown_message_type_returns_error():
         sid = f"test-unk-{uuid.uuid4().hex[:8]}"
         ws.send_json(_make_msg("bogus_type", sid))
 
-        # Should get server_status (registration) then error
+        # Should get server_status → agent_list (PR 11) → error
         msgs = []
-        for _ in range(2):
+        for _ in range(3):
             msgs.append(ws.receive_json())
 
         types = [m["type"] for m in msgs]
         assert "server_status" in types
+        assert "agent_list" in types
         assert "error" in types
 
 
@@ -86,17 +91,15 @@ def test_audio_chunk_echo(silent_wav_ieee_float):
         sid = f"test-aud-{uuid.uuid4().hex[:8]}"
         ws.send_json(_make_audio_chunk(sid, silent_wav_ieee_float))
 
-        # Skip server_status
-        msg1 = ws.receive_json()
-        if msg1["type"] == "server_status":
-            msg2 = ws.receive_json()
-        else:
-            msg2 = msg1
+        # Skip server_status and agent_list (PR 11)
+        msg = ws.receive_json()
+        while msg["type"] in ("server_status", "agent_list"):
+            msg = ws.receive_json()
 
-        assert msg2["type"] == "echo"
-        assert msg2["payload"]["received_type"] == "audio_chunk"
-        assert msg2["payload"]["duration_ms"] == 60
-        assert isinstance(msg2["payload"]["total_audio_ms"], (int, float))
+        assert msg["type"] == "echo"
+        assert msg["payload"]["received_type"] == "audio_chunk"
+        assert msg["payload"]["duration_ms"] == 60
+        assert isinstance(msg["payload"]["total_audio_ms"], (int, float))
 
 
 def test_video_frame_echo():
