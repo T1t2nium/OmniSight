@@ -156,12 +156,18 @@ class BailianHTTPClient(BaseAIClient):
                     }
                     return
 
+                raw_lines = 0
                 async for line in response.aiter_lines():
+                    raw_lines += 1
+                    if raw_lines <= 3:
+                        logger.info("Bailian raw line %d: %s", raw_lines, line[:300])
+
                     if not line:
                         continue
 
                     # SSE format: "data: <json>"
                     if not line.startswith("data:"):
+                        logger.debug("Bailian: non-data line: %s", line[:100])
                         continue
 
                     data_str = line[5:].strip()
@@ -175,6 +181,11 @@ class BailianHTTPClient(BaseAIClient):
                             "Bailian: unparseable SSE line: %s", line[:100]
                         )
                         continue
+
+                    if raw_lines <= 3:
+                        logger.info("Bailian parsed JSON keys: %s", list(data.keys())[:10])
+                        if "output" in data:
+                            logger.info("Bailian output keys: %s", list(data["output"].keys())[:10])
 
                     # Extract incremental text from the DashScope response
                     output = data.get("output", {})
@@ -211,7 +222,11 @@ class BailianHTTPClient(BaseAIClient):
                                 usage.get("output_tokens", 0),
                                 total_duration,
                             )
+                        else:
+                            logger.info("Bailian response done — total lines: %d, %.1fs", raw_lines, total_duration)
                         return
+
+                logger.warning("Bailian SSE stream ended without done signal — total lines: %d", raw_lines)
 
         except (httpx.TimeoutException, httpx.ConnectError) as exc:
             logger.error("Bailian API request failed: %s", exc)
