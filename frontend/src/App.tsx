@@ -165,9 +165,9 @@ function App() {
           });
           return;
         }
-        // Final chunk — update the existing streaming message in-place
-        if (!llmBufferRef.current) return;
-        const finalText = llmBufferRef.current;
+        // Final chunk — update existing streaming message, or append new
+        const finalText = llmBufferRef.current || p.delta;
+        if (!finalText) return;
         const finalDuration = p.total_duration;
         llmBufferRef.current = '';
 

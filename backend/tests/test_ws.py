@@ -185,6 +185,7 @@ def test_health_endpoint():
     data = resp.json()
     assert data["status"] == "ok"
     assert "version" in data
-    assert "ollama_available" in data
+    assert "ai_provider" in data
+    assert "ai_available" in data
     assert "active_sessions" in data
     assert "uptime_seconds" in data
