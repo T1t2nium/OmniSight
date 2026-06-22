@@ -54,6 +54,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     session_id: str | None = None
     heartbeat_task: asyncio.Task | None = None
 
+    # PR 11: Send agent list immediately on connect (before first message).
+    # This lets the frontend show the current agent right away.
+    # Use a placeholder session_id — the frontend doesn't filter on it.
+    agents = AgentRegistry.list_agents()
+    agent_list = AgentListPayload(
+        agents=[AgentInfo(**a) for a in agents]
+    )
+    await _send_message(websocket, "pending", "agent_list", agent_list.model_dump())
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -71,12 +80,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     websocket, session_id, "connected",
                     f"Session {session_id} registered",
                 )
-                # PR 11: Send available agent list
-                agents = AgentRegistry.list_agents()
-                agent_list = AgentListPayload(
-                    agents=[AgentInfo(**a) for a in agents]
-                )
-                await _send_message(websocket, session_id, "agent_list", agent_list.model_dump())
                 logger.info("Session registered: %s", session_id)
                 # PR 5: Start heartbeat for this session
                 heartbeat_task = asyncio.create_task(
