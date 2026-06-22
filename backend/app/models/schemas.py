@@ -117,6 +117,7 @@ class AgentInfo(BaseModel):
     agent_id: str
     name: str
     description: str
+    ui_config: dict = Field(default_factory=dict)
 
 
 class AgentListPayload(BaseModel):
@@ -129,3 +130,32 @@ class AgentSelectPayload(BaseModel):
     """Sent by client to switch the active agent for this session."""
 
     agent_id: str
+
+
+# ---- PR 13: Document Upload & Question Bank Payloads ----
+
+
+class DocumentUploadPayload(BaseModel):
+    """Sent by client when uploading a JD or resume document."""
+
+    doc_type: Literal["jd", "resume"]
+    filename: str
+    data: str  # base64-encoded file bytes
+
+
+class DocumentParsedPayload(BaseModel):
+    """Sent by server after document parsing and entity extraction."""
+
+    doc_type: Literal["jd", "resume"]
+    filename: str = ""
+    jd_entities: Optional[dict] = None
+    resume_entities: Optional[dict] = None
+    match_result: Optional[dict] = None
+
+
+class QuestionBankPayload(BaseModel):
+    """Sent by server with AI-generated interview question bank."""
+
+    categories: list[dict]
+    total_questions: int
+    generated_at: str = ""

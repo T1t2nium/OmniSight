@@ -122,12 +122,17 @@ class AgentRegistry:
 
     @classmethod
     def list_agents(cls) -> list[dict]:
-        """Return lightweight agent info for the frontend agent list."""
+        """Return lightweight agent info for the frontend agent list.
+
+        Includes ui_config so the frontend can conditionally render
+        agent-specific UI components (document upload, question bank, etc.).
+        """
         return [
             {
                 "agent_id": a.agent_id,
                 "name": a.name,
                 "description": a.description,
+                "ui_config": a.get_ui_config(),
             }
             for a in cls._agents.values()
         ]

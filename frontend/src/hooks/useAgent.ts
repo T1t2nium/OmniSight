@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { WSMessage, AgentInfo, AgentSelectPayload } from '../types';
+import type { WSMessage, AgentInfo, AgentUIConfig, AgentSelectPayload } from '../types';
 
 export interface UseAgentReturn {
   /** Available agents from the server. */
   agents: AgentInfo[];
   /** Currently selected agent id. */
   selectedAgentId: string;
+  /** UI config for the currently selected agent. */
+  uiConfig: AgentUIConfig;
   /** Select an agent — sends agent_select message. */
   selectAgent: (agentId: string) => void;
 }
+
+const DEFAULT_UI_CONFIG: AgentUIConfig = {
+  show_document_upload: false,
+  show_question_bank: false,
+  header_color: '#6366f1',
+};
 
 /**
  * Manages agent selection state — listens for agent_list messages
@@ -25,6 +33,7 @@ export function useAgent(
 ): UseAgentReturn {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('chat');
+  const [uiConfig, setUiConfig] = useState<AgentUIConfig>(DEFAULT_UI_CONFIG);
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
 
@@ -38,7 +47,15 @@ export function useAgent(
           // Default to first agent if not already set
           setSelectedAgentId((prev) => {
             const exists = payload.agents.some((a) => a.agent_id === prev);
-            return exists ? prev : payload.agents[0].agent_id;
+            if (exists) {
+              // Update ui_config for the currently selected agent
+              const current = payload.agents.find((a) => a.agent_id === prev);
+              if (current?.ui_config) setUiConfig(current.ui_config);
+              return prev;
+            }
+            const first = payload.agents[0];
+            if (first.ui_config) setUiConfig(first.ui_config);
+            return first.agent_id;
           });
         }
       }
@@ -48,6 +65,11 @@ export function useAgent(
   const selectAgent = useCallback(
     (agentId: string) => {
       setSelectedAgentId(agentId);
+      // Update ui_config for selected agent
+      const agent = agents.find((a) => a.agent_id === agentId);
+      if (agent?.ui_config) setUiConfig(agent.ui_config);
+      else setUiConfig(DEFAULT_UI_CONFIG);
+
       const payload: AgentSelectPayload = { agent_id: agentId };
       send({
         type: 'agent_select',
@@ -56,8 +78,8 @@ export function useAgent(
         payload: payload as unknown as Record<string, unknown>,
       });
     },
-    [send],
+    [send, agents],
   );
 
-  return { agents, selectedAgentId, selectAgent };
+  return { agents, selectedAgentId, uiConfig, selectAgent };
 }

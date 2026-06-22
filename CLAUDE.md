@@ -33,13 +33,19 @@
 - **AI — Ollama**：[backend/app/services/ollama_client.py](backend/app/services/ollama_client.py) — Ollama 本地模型
 - **AI — 百炼**：[backend/app/services/bailian_http_client.py](backend/app/services/bailian_http_client.py) — 阿里云百炼云端模型
 - **Agent 框架**：[backend/app/agents/base.py](backend/app/agents/base.py) — BaseAgent ABC + AgentRegistry + ChatAgent
+- **Interview Agent**：[backend/app/agents/interview/agent.py](backend/app/agents/interview/agent.py) — 企业海面助手 (JD+简历→题库)
 - **系统提示词**：[backend/app/services/prompts.py](backend/app/services/prompts.py) — 多 Agent 共享 Prompt 管理
 - **语音识别**：[backend/app/services/transcriber.py](backend/app/services/transcriber.py) — faster-whisper (ModelScope下载+CUDA)
 - **TTS 引擎**：[backend/app/services/sherpa_tts.py](backend/app/services/sherpa_tts.py) — sherpa-onnx (默认)
 - **TTS 后备**：[backend/app/services/tts.py](backend/app/services/tts.py) — Piper TTS (后备)
+- **文档解析**：[backend/app/services/document_parser.py](backend/app/services/document_parser.py) — PDF/DOCX 文本提取
+- **实体提取**：[backend/app/services/entity_extractor.py](backend/app/services/entity_extractor.py) — JD/简历规则提取+匹配
+- **题库生成**：[backend/app/services/question_generator.py](backend/app/services/question_generator.py) — AI 分类题库生成
 - **前端入口**：[frontend/src/main.tsx](frontend/src/main.tsx) — React 应用
 - **前端组件**：[frontend/src/App.tsx](frontend/src/App.tsx) — 根组件
 - **Agent 选择器**：[frontend/src/components/AgentSelector.tsx](frontend/src/components/AgentSelector.tsx) — 玻璃态胶囊标签
+- **文档上传**：[frontend/src/components/DocumentUpload.tsx](frontend/src/components/DocumentUpload.tsx) — 双区拖拽上传
+- **题库展示**：[frontend/src/components/QuestionBank.tsx](frontend/src/components/QuestionBank.tsx) — 折叠分类题库
 - **设计 Token**：[frontend/src/styles/tokens.css](frontend/src/styles/tokens.css) — CSS 变量体系
 - **全局样式**：[frontend/src/App.css](frontend/src/App.css) — 所有视觉样式
 

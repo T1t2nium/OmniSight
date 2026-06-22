@@ -30,6 +30,13 @@ class SessionState:
     history: list[dict] = field(default_factory=list)
     # PR 11: selected agent for this session
     selected_agent: str = "chat"
+    # PR 13: interview document state
+    jd_entities: dict | None = None
+    resume_entities: dict | None = None
+    match_result: dict | None = None
+    question_bank: dict | None = None
+    jd_filename: str = ""
+    resume_filename: str = ""
 
 
 class ConnectionStateManager:

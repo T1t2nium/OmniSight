@@ -26,11 +26,16 @@ from app.models.schemas import (
     InterruptPayload,
     AgentListPayload,
     AgentInfo,
+    DocumentParsedPayload,
 )
 from app.models.state import ConnectionStateManager
+from app.models.interview import JDEntities, ResumeEntities, MatchResult
 from app.services.audio import AudioBufferManager
 from app.services.conversation import ConversationOrchestrator
 from app.services.frame_manager import FrameMotionDetector
+from app.services.document_parser import DocumentParser
+from app.services.entity_extractor import EntityExtractor
+from app.services.question_generator import QuestionGenerator
 from app.agents.base import AgentRegistry
 from app.config import get_settings
 
@@ -104,6 +109,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _handle_vad_event(websocket, session_id, payload)
                 elif msg_type == "agent_select":
                     await _handle_agent_select(websocket, session_id, payload)
+                elif msg_type == "document_upload":
+                    await _handle_document_upload(websocket, session_id, payload)
                 else:
                     await _send_error(websocket, session_id,
                                       f"Unknown message type: {msg_type}")
@@ -260,6 +267,109 @@ async def _handle_agent_select(
         logger.info("Session %s selected agent: %s", session_id, agent_id)
     echo = EchoPayload(received_type="agent_select")
     await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
+# ---- Document Upload & Interview Pipeline ----
+
+
+async def _handle_document_upload(
+    ws: WebSocket, session_id: str, payload: dict
+) -> None:
+    """Handle document upload for the interview agent.
+
+    Parses the uploaded file (PDF/DOCX), extracts entities,
+    and when both JD and resume are ready, runs match + question generation.
+    """
+    doc_type = payload.get("doc_type", "")
+    filename = payload.get("filename", "")
+    b64_data = payload.get("data", "")
+
+    if doc_type not in ("jd", "resume"):
+        await _send_error(ws, session_id, f"Invalid doc_type: {doc_type}")
+        return
+
+    if not b64_data:
+        await _send_error(ws, session_id, "Missing file data")
+        return
+
+    session = await state_manager.get(session_id)
+    if not session:
+        await _send_error(ws, session_id, "Session not found")
+        return
+
+    try:
+        file_bytes = base64.b64decode(b64_data)
+        parsed = DocumentParser.parse(file_bytes, filename)
+        logger.info(
+            "Document parsed: type=%s file=%s pages=%d chars=%d",
+            doc_type, filename, len(parsed.pages), len(parsed.raw_text),
+        )
+
+        # Build response payload
+        response = DocumentParsedPayload(doc_type=doc_type, filename=filename)
+
+        if doc_type == "jd":
+            jd = EntityExtractor.extract_jd(parsed)
+            session.jd_entities = jd.model_dump()
+            session.jd_filename = filename
+            response.jd_entities = session.jd_entities
+            logger.info("JD entities extracted: %s", jd.position_title or "(no title)")
+        else:
+            resume = EntityExtractor.extract_resume(parsed)
+            session.resume_entities = resume.model_dump()
+            session.resume_filename = filename
+            response.resume_entities = session.resume_entities
+            logger.info("Resume entities extracted: %s", resume.name or "(no name)")
+
+        # If both JD and resume are ready, run matching
+        if session.jd_entities and session.resume_entities:
+            jd_entities = JDEntities(**session.jd_entities)
+            resume_entities = ResumeEntities(**session.resume_entities)
+            match_result = EntityExtractor.match(jd_entities, resume_entities)
+            session.match_result = match_result.model_dump()
+            response.match_result = session.match_result
+            logger.info(
+                "Match complete: %.0f%% — %d matched, %d missing",
+                match_result.match_percentage,
+                len(match_result.matched_skills),
+                len(match_result.missing_skills),
+            )
+
+        await _send_message(ws, session_id, "document_parsed", response.model_dump())
+
+        # If match is complete, generate question bank in background
+        if session.match_result:
+            asyncio.create_task(_generate_question_bank(ws, session_id))
+
+    except Exception:
+        logger.exception("Document upload processing failed for %s", session_id)
+        await _send_error(ws, session_id, f"Failed to process {filename}")
+
+
+async def _generate_question_bank(ws: WebSocket, session_id: str) -> None:
+    """Generate interview question bank using AI and send to frontend."""
+    session = await state_manager.get(session_id)
+    if not session or not session.jd_entities or not session.resume_entities or not session.match_result:
+        return
+
+    try:
+        orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
+        ai_client = orchestrator._ai_client
+
+        jd = JDEntities(**session.jd_entities)
+        resume = ResumeEntities(**session.resume_entities)
+        match = MatchResult(**session.match_result)
+
+        question_bank = await QuestionGenerator.generate(ai_client, jd, resume, match)
+        session.question_bank = question_bank.model_dump()
+
+        await _send_message(ws, session_id, "question_bank", question_bank.model_dump())
+        logger.info(
+            "Question bank sent: %d questions in %d categories",
+            question_bank.total_questions, len(question_bank.categories),
+        )
+    except Exception:
+        logger.exception("Question bank generation failed for %s", session_id)
 
 
 # ---- AI Pipeline ----

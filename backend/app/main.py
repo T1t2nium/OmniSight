@@ -22,6 +22,7 @@ from app.services.conversation import ConversationOrchestrator
 from app.services.tts import PiperTTS, PiperTTSError
 from app.services.sherpa_tts import SherpaTTS, SherpaTTSError
 from app.agents.base import AgentRegistry, ChatAgent
+from app.agents.interview import InterviewAgent
 
 logging.basicConfig(
     level=logging.INFO,
@@ -130,8 +131,9 @@ async def lifespan(app: FastAPI):
 
     orchestrator = ConversationOrchestrator(transcriber, ai_client, tts)
 
-    # PR 11: Initialize agent registry and register default agents
+    # PR 11: Initialize agent registry and register agents
     AgentRegistry.register(ChatAgent())
+    AgentRegistry.register(InterviewAgent())
     logger.info("Agent registry initialized — %d agent(s) registered", len(AgentRegistry.list_agents()))
 
     # Store in app.state for route handlers
