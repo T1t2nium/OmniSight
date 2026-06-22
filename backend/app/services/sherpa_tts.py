@@ -27,37 +27,54 @@ logger = logging.getLogger(__name__)
 
 
 def _fix_onnxruntime_dll() -> None:
-    """Replace sherpa-onnx's bundled ORT 1.17 DLL with the system ORT >=1.20.
+    """Ensure sherpa-onnx uses the system ORT >=1.20 instead of bundled 1.17.
 
-    sherpa-onnx 1.13.x ships with onnxruntime 1.17.1, but recent models
-    require ORT 1.20+ (API version 24). We copy the system ORT DLL over
-    the bundled one so model loading doesn't segfault.
+    sherpa-onnx 1.13.x bundles onnxruntime 1.17.1, but recent models
+    require ORT 1.20+ (API version 24). The C extension (_sherpa_onnx.pyd)
+    loads onnxruntime.dll from its lib/ directory at runtime. We need to
+    put the system ORT DLL there so model loading doesn't fail.
+
+    Two scenarios:
+    1. Fresh install: bundled DLL present → back up, replace with system DLL
+    2. Upgrade / reinstall: bundled DLL missing (already backed up as .bak)
+       → copy system DLL directly
     """
     try:
         import onnxruntime as ort
         import sherpa_onnx as _s
 
         ort_dll = Path(ort.__file__).parent / "capi" / "onnxruntime.dll"
-        bundled_dll = Path(_s.__file__).parent / "lib" / "onnxruntime.dll"
+        lib_dir = Path(_s.__file__).parent / "lib"
+        bundled_dll = lib_dir / "onnxruntime.dll"
+        bak_dll = bundled_dll.with_suffix(".dll.bak")
 
-        if not ort_dll.is_file() or not bundled_dll.is_file():
+        if not ort_dll.is_file():
+            logger.warning("System ORT DLL not found at %s", ort_dll)
             return
 
-        # Only replace if the system DLL is newer (different size)
+        if not bundled_dll.is_file():
+            # Scenario 2: bundled DLL missing (already backed up or removed)
+            if bak_dll.is_file():
+                logger.info("ORT DLL: copying system ORT (bundled was already backed up)")
+            else:
+                logger.info("ORT DLL: copying system ORT (no bundled DLL found)")
+            shutil.copy2(ort_dll, bundled_dll)
+            logger.info("ORT DLL patched successfully")
+            return
+
+        # Scenario 1: both files exist — replace if sizes differ
         if ort_dll.stat().st_size != bundled_dll.stat().st_size:
             logger.info(
                 "Patching ORT DLL: %d MB → %d MB",
                 bundled_dll.stat().st_size // 1048576,
                 ort_dll.stat().st_size // 1048576,
             )
-            # Backup original
-            bak = bundled_dll.with_suffix(".dll.bak")
-            if not bak.exists():
-                shutil.copy2(bundled_dll, bak)
+            if not bak_dll.exists():
+                shutil.copy2(bundled_dll, bak_dll)
             shutil.copy2(ort_dll, bundled_dll)
             logger.info("ORT DLL patched successfully")
     except Exception:
-        logger.debug("ORT DLL patch skipped (non-critical)", exc_info=True)
+        logger.warning("ORT DLL patch failed — TTS may not work", exc_info=True)
 
 
 # Auto-fix ORT DLL on module import
