@@ -17,6 +17,56 @@
 | 7 | `phase/7-kokoro-tts` | TTS 质量升级：Piper → sherpa-onnx ✅ | PR 4 |
 | 8 | `phase/8-system-prompt` | 系统提示词 + 沉浸式对话体验 ✅ | PR 7 |
 | 9 | `phase/9-frontend-ui-final` | 前端 UI 终极优化：Canvas 背景 + 玻璃按钮 ✅ | PR 8 |
+| 10 | `phase/10-ai-provider-abstraction` | AI Provider 抽象层 + 百炼 HTTP 集成 ✅ | PR 9 |
+| 11 | `phase/11-agent-framework` | Agent 框架 + Agent 选择器 UI ✅ | PR 10 |
+
+---
+
+## PR 10: AI Provider 抽象层 + 百炼 HTTP 集成
+
+### 任务清单
+
+- [x] 新建 `base_ai_client.py` — BaseAIClient ABC (chat/check_health/close)
+- [x] 新建 `bailian_http_client.py` — 百炼 DashScope 多模态生成 HTTP SSE 流式
+- [x] 重构 `ollama_client.py` — 实现 BaseAIClient 接口
+- [x] 重构 `conversation.py` — OllamaClient → BaseAIClient，完全 provider 无关
+- [x] 修改 `config.py` — ai_provider: "ollama" | "bailian"
+- [x] 修改 `main.py` — 根据 ai_provider 自动选择初始化客户端
+- [x] Whisper 模型下载优化 — ModelScope 国内满速 + CUDA 支持
+- [x] sherpa-onnx ORT DLL 版本修复 (1.17 → 1.20+)
+- [x] 前端修复 — 一次性 LLM 回复不显示 bug
+
+### 验证标准
+
+- ✅ 31/31 测试全部通过
+- ✅ Ollama 模式完全向后兼容
+- ✅ 百炼 API Key 配置后 health: ai_provider=bailian, ai_available=true
+
+---
+
+## PR 11: Agent 框架 + Agent 选择器 UI
+
+### 任务清单
+
+- [x] 新建 `agents/base.py` — BaseAgent ABC + AgentRegistry + ChatAgent
+- [x] `chat()` 新增 `system_prompt` 参数 (base_ai_client → ollama/bailian)
+- [x] `process_utterance()` 透传 system_prompt (conversation.py)
+- [x] SessionState 新增 `selected_agent` 字段 (state.py)
+- [x] 新增 AgentInfo/AgentListPayload/AgentSelectPayload (schemas.py)
+- [x] WS 消息：agent_list (会话注册后发送) + agent_select 处理 (ws.py)
+- [x] Agent 管线注入 — session.agent_id → AgentRegistry → system_prompt (ws.py)
+- [x] main.py lifespan 中注册 ChatAgent
+- [x] 前端 AgentSelector 组件 (玻璃态胶囊标签)
+- [x] 前端 useAgent hook (监听 agent_list, 提供 selectAgent)
+- [x] 前端类型扩展 (AgentInfo, AgentListPayload, AgentSelectPayload)
+- [x] App.tsx 集成 AgentSelector + useAgent
+
+### 验证标准
+
+- ✅ 31/31 测试全部通过
+- ✅ TypeScript 零类型错误
+- ✅ Header 显示「💬 视觉聊天伴侣」胶囊标签
+- ✅ 对话功能正常（system prompt 通过 Agent 框架注入）
 
 ---
 

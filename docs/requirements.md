@@ -62,15 +62,22 @@
 - **F9.2** 打断后 AI 立即停止输出
 - **F9.3** 打断后开始处理新的用户输入
 
-### F10. UI/UX 设计
-- **F10.1** 采用暗色主题（GitHub Dark），视觉统一一致
-- **F10.2** 响应式布局：支持桌面（960px）、平板（768px）、手机（480px）
-- **F10.3** 聊天气泡：用户/AI 区分明显，流式文本动画，时间戳 hover 显示
-- **F10.4** 状态可视化：VAD 呼吸灯动画、连接状态颜色梯度、延迟实时显示
-- **F10.5** 磨砂玻璃效果：状态栏和控制栏半透明 backdrop-filter
-- **F10.6** 按钮交互：hover 高亮、active 缩放反馈、focus-visible 轮廓
-- **F10.7** 动画尊重 prefers-reduced-motion 用户偏好
-- **F10.8** 无障碍：ARIA 标签、role 属性、键盘导航支持
+### F10. Agent 系统
+- **F10.1** 支持可扩展的 Agent 框架（BaseAgent ABC + AgentRegistry）
+- **F10.2** 默认「视觉聊天伴侣」Agent，保持现有对话体验
+- **F10.3** Agent 可注入不同的 system prompt，改变 AI 行为和人设
+- **F10.4** 前端 Agent 选择器（玻璃态胶囊标签），支持运行时查看当前 Agent
+- **F10.5** 每会话独立选择 Agent，互不干扰
+
+### F11. UI/UX 设计
+- **F11.1** 采用暗色主题（GitHub Dark），视觉统一一致
+- **F11.2** 响应式布局：支持桌面（960px）、平板（768px）、手机（480px）
+- **F11.3** 聊天气泡：用户/AI 区分明显，流式文本动画，时间戳 hover 显示
+- **F11.4** 状态可视化：VAD 呼吸灯动画、连接状态颜色梯度、延迟实时显示
+- **F11.5** 磨砂玻璃效果：状态栏和控制栏半透明 backdrop-filter
+- **F11.6** 按钮交互：hover 高亮、active 缩放反馈、focus-visible 轮廓
+- **F11.7** 动画尊重 prefers-reduced-motion 用户偏好
+- **F11.8** 无障碍：ARIA 标签、role 属性、键盘导航支持
 
 ---
 
@@ -96,9 +103,10 @@
 - **N4.3** 无硬编码密钥，敏感配置通过 .env 管理
 
 ### N5. 可维护性
-- **N5.1** AI 模型提供商可切换（Ollama / Gemini）
-- **N5.2** TTS 引擎可切换（浏览器 SpeechSynthesis / Piper）
+- **N5.1** AI 模型提供商可切换（Ollama / 阿里云百炼 / Gemini）
+- **N5.2** TTS 引擎可切换（sherpa-onnx / Piper / 浏览器 SpeechSynthesis）
 - **N5.3** STT 引擎可切换（faster-whisper / OpenAI Whisper API）
+- **N5.4** Agent 框架可扩展（注册新 Agent 无需修改现有代码）
 
 ---
 

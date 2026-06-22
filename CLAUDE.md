@@ -1,6 +1,6 @@
 # OmniSight — AI Visual Conversation Assistant
 
-> 基于浏览器的 AI 视觉对话助手。前端 React + TypeScript，后端 Python FastAPI，支持 Ollama 本地模型 / 阿里云百炼云端模型双引擎。
+> 基于浏览器的 AI 视觉对话助手。前端 React + TypeScript，后端 Python FastAPI，支持 Ollama 本地模型 / 阿里云百炼云端模型双引擎，内置可扩展 Agent 框架。
 
 ## 工作流程
 
@@ -32,11 +32,14 @@
 - **AI 抽象层**：[backend/app/services/base_ai_client.py](backend/app/services/base_ai_client.py) — AI Provider 统一接口
 - **AI — Ollama**：[backend/app/services/ollama_client.py](backend/app/services/ollama_client.py) — Ollama 本地模型
 - **AI — 百炼**：[backend/app/services/bailian_http_client.py](backend/app/services/bailian_http_client.py) — 阿里云百炼云端模型
+- **Agent 框架**：[backend/app/agents/base.py](backend/app/agents/base.py) — BaseAgent ABC + AgentRegistry + ChatAgent
+- **系统提示词**：[backend/app/services/prompts.py](backend/app/services/prompts.py) — 多 Agent 共享 Prompt 管理
 - **语音识别**：[backend/app/services/transcriber.py](backend/app/services/transcriber.py) — faster-whisper (ModelScope下载+CUDA)
 - **TTS 引擎**：[backend/app/services/sherpa_tts.py](backend/app/services/sherpa_tts.py) — sherpa-onnx (默认)
 - **TTS 后备**：[backend/app/services/tts.py](backend/app/services/tts.py) — Piper TTS (后备)
 - **前端入口**：[frontend/src/main.tsx](frontend/src/main.tsx) — React 应用
 - **前端组件**：[frontend/src/App.tsx](frontend/src/App.tsx) — 根组件
+- **Agent 选择器**：[frontend/src/components/AgentSelector.tsx](frontend/src/components/AgentSelector.tsx) — 玻璃态胶囊标签
 - **设计 Token**：[frontend/src/styles/tokens.css](frontend/src/styles/tokens.css) — CSS 变量体系
 - **全局样式**：[frontend/src/App.css](frontend/src/App.css) — 所有视觉样式
 

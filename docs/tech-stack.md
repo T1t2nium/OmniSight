@@ -59,17 +59,28 @@ uv sync                  # 按 pyproject.toml 同步依赖
 | **numpy** | 数值运算 | 音频/图像数据处理基础 |
 | **pydantic** | 数据验证 | FastAPI 原生支持，类型安全 |
 | **python-dotenv** | 环境配置 | .env 文件管理 |
-| **httpx** | HTTP 客户端 | 异步 HTTP，调用 Ollama API |
+| **httpx** | HTTP 客户端 | 异步 HTTP，调用 Ollama / 百炼 API |
+| **pydantic-settings** | 环境配置 | .env 文件加载与验证 |
 
 ### AI/ML 相关
 
 | 技术 | 用途 | 选择理由 |
 |------|------|---------|
 | **Ollama** | 本地模型运行器 | Windows 原生支持，HTTP API，自动管理模型 |
-| **faster-whisper** | 语音转文字 | CTranslate2 加速，比 OpenAI Whisper 快 4x，支持 CPU |
+| **阿里云百炼 DashScope** | 云端多模态模型 | qwen3.5-omni-plus，HTTP SSE 流式，视觉+语音一体化 |
+| **faster-whisper** | 语音转文字 | CTranslate2 加速，比 OpenAI Whisper 快 4x，支持 CPU/CUDA |
 | **torch** | PyTorch 运行时 | faster-whisper 依赖，模型推理 |
+| **modelscope** | 模型下载（魔搭） | 国内满速下载 faster-whisper 模型，HuggingFace 自动 fallback |
 | **piper-tts** (后备) | 本地 TTS（后备选项） | ONNX Runtime，Windows 兼容，轻量 |
 | **sherpa-onnx** (默认) | 本地 TTS（默认引擎） | matcha-icefall-zh-baker，内置中文 FST+词典，Apache 2.0 |
+
+### Agent 框架
+
+| 技术 | 用途 | 选择理由 |
+|------|------|---------|
+| **BaseAgent (ABC)** | Agent 抽象协议 | 零依赖，定义 agent_id/name/description/system_prompt |
+| **AgentRegistry** | Agent 注册表 | 类方法单例，注册/查找/列表 |
+| **ChatAgent** | 默认 Agent | 视觉聊天伴侣，复用已有 SYSTEM_PROMPT |
 
 ### 可选云端备选
 
@@ -89,18 +100,19 @@ uv sync                  # 按 pyproject.toml 同步依赖
 ```json
 {"type": "audio_chunk", "data": "<base64 pcm16>", "timestamp": 1234567890}
 {"type": "video_frame", "data": "<base64 jpeg>", "timestamp": 1234567890, "width": 640, "height": 480}
-{"type": "vad_event", "event": "speech_start", "timestamp": 1234567890}
-{"type": "vad_event", "event": "speech_end", "timestamp": 1234567890}
+{"type": "vad_event", "event": "speech_start | speech_end", "timestamp": 1234567890}
+{"type": "agent_select", "payload": {"agent_id": "chat"}, "timestamp": 1234567890}
 ```
 
 **服务器 → 浏览器**：
 ```json
-{"type": "server_echo", "message": "received 2500ms audio, 15 frames"}
-{"type": "transcript", "text": "用户说的话", "timestamp": 1234567890}
-{"type": "response_text", "text": "AI 回复内容", "chunk": true}
-{"type": "response_end", "timestamp": 1234567890}
-{"type": "error", "message": "错误描述"}
-{"type": "interrupt", "timestamp": 1234567890}
+{"type": "server_status", "payload": {"status": "connected"}, "timestamp": 1234567890}
+{"type": "agent_list", "payload": {"agents": [{"agent_id": "chat", "name": "视觉聊天伴侣", ...}]}}
+{"type": "transcript", "payload": {"text": "用户说的话", "language": "zh", "duration_ms": 2500}}
+{"type": "llm_response", "payload": {"delta": "AI 回复内容", "done": false}}
+{"type": "tts_audio", "payload": {"data": "<base64 pcm16>", "sample_rate": 44100}}
+{"type": "interrupt", "payload": {"reason": "user_interrupt"}}
+{"type": "error", "payload": {"message": "错误描述"}}
 ```
 
 ---
