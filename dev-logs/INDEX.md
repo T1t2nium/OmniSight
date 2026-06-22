@@ -19,6 +19,7 @@
 | 2026-06-14 | PR 9 — 前端 UI 终极优化：Canvas 背景 + 玻璃按钮 ✅ | [2026-06-14-pr9-frontend-ui-final.md](2026-06-14-pr9-frontend-ui-final.md) |
 | 2026-06-22 | **PR 10 — AI Provider 抽象层 + 阿里云百炼 HTTP 集成 ✅** | [2026-06-22-pr10-ai-provider-abstraction.md](2026-06-22-pr10-ai-provider-abstraction.md) |
 | 2026-06-23 | **PR 11 — Agent 框架 + Agent 选择器 UI ✅** | [2026-06-23-pr11-agent-framework.md](2026-06-23-pr11-agent-framework.md) |
+| 2026-06-23 | **PR 12 — 文档解析 + 实体提取服务 ✅** | [2026-06-23-pr12-document-parser.md](2026-06-23-pr12-document-parser.md) |
 
 ---
 
