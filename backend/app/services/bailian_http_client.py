@@ -127,6 +127,8 @@ class BailianHTTPClient(BaseAIClient):
                 "result_format": "message",
                 # Text-only output for chat mode (no audio generation)
                 "modalities": ["text"],
+                # Required by qwen-omni models — must be true
+                "enable_omni_output_audio_url": True,
             },
         }
 
@@ -248,6 +250,7 @@ class BailianHTTPClient(BaseAIClient):
                 "incremental_output": False,
                 "result_format": "message",
                 "modalities": ["text"],
+                "enable_omni_output_audio_url": True,
             },
         }
 
