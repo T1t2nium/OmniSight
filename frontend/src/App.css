@@ -100,34 +100,62 @@ body {
 /* ===== Layout Sections ===== */
 
 .layout-top {
-  display: flex;
-  gap: var(--space-3);
+  position: relative;
   padding: var(--space-3) var(--space-5);
   flex-shrink: 0;
-  align-items: stretch;
+  /* anchor for the absolutely-positioned side panel */
 }
 
 .layout-top__video {
-  flex: 1;
-  min-width: 0;
-  transition: flex var(--transition-slow);
+  /* video always fills the full width — side panel overlays it */
 }
 
 .layout-top__side {
-  width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateX(20px);
-  transition:
-    width 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.3s ease-out,
-    transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  position: absolute;
+  right: var(--space-5);
+  top: var(--space-3);
+  bottom: var(--space-3);
+  width: 320px;
+  z-index: 10;
+  pointer-events: none;
+  /* Hidden: slid fully off-screen to the right */
+  transform: translateX(calc(100% + var(--space-5)));
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/* Expanded: full panel visible, interactive */
 .layout-top__side--open {
-  width: 320px;
-  opacity: 1;
   transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* Collapsed: only the 48px tab peeks out */
+.layout-top__side--collapsed {
+  transform: translateX(calc(320px - 48px));
+  pointer-events: auto;
+}
+
+/* Hover on collapsed tab → temporarily expand */
+.layout-top__side--collapsed:hover {
+  transform: translateX(0);
+}
+
+/* Collapsed tab hint: subtle left-edge glow */
+.layout-top__side--collapsed::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  background: var(--gradient-accent);
+  border-radius: 1px;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.layout-top__side--collapsed:hover::before {
+  opacity: 0;
 }
 
 .layout-status {
@@ -953,34 +981,15 @@ body {
   }
 
   .layout-top {
-    flex-direction: column;
     padding: var(--space-2);
-    gap: var(--space-2);
   }
 
   .layout-top__side {
-    width: 100%;
-    transform: translateY(10px);
-    transition:
-      max-height 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 0.3s ease-out,
-      transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-  }
-
-  .layout-top__side--open {
-    width: 100%;
-    transform: translateY(0);
-  }
-
-  /* Override width transition on mobile — use max-height instead */
-  .layout-top__side {
-    width: 100% !important;
-    max-height: 0;
-  }
-
-  .layout-top__side--open {
-    max-height: 500px;
-    width: 100% !important;
+    position: absolute;
+    right: var(--space-2);
+    top: var(--space-2);
+    bottom: var(--space-2);
+    width: 280px;
   }
 
   .video-panel {
@@ -1101,37 +1110,120 @@ body {
 }
 
 /* ========================================================================
-   PR 13: Document Upload — dual-zone drag-and-drop
+   PR 13: Document Upload — absolute overlay, auto-collapse, hover expand
    ======================================================================== */
 
 .document-upload {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
   height: 100%;
-  overflow-y: auto;
-  padding-right: 4px;
+  display: flex;
+  flex-direction: row;
+  /* Expanded panel slides right to reveal collapsed tab */
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.document-upload::-webkit-scrollbar {
-  width: 4px;
+/* ---- Collapsed state: slim vertical tab on right edge ---- */
+
+.document-upload--collapsed {
+  cursor: pointer;
 }
 
-.document-upload::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.document-upload::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-full);
-}
-
-.document-upload__zone {
+.document-upload__collapsed-tab {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  width: 48px;
+  flex-shrink: 0;
   background: var(--color-glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  padding: var(--space-3) 0;
+}
+
+.document-upload--collapsed .document-upload__collapsed-tab {
+  display: flex;
+}
+
+.document-upload__collapsed-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.1rem;
+  position: relative;
+}
+
+.document-upload__collapsed-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.document-upload__collapsed-dot--done {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.document-upload__collapsed-dot--error {
+  background: #ef4444;
+}
+
+.document-upload__collapsed-dot--uploading,
+.document-upload__collapsed-dot--parsing {
+  background: #fbbf24;
+  animation: dotPulse 1s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ---- Expanded content ---- */
+
+.document-upload__expanded {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--color-glass-border);
+  border-left: none;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.document-upload--collapsed .document-upload__expanded {
   border-radius: var(--radius-lg);
+}
+
+.document-upload__expanded::-webkit-scrollbar {
+  width: 4px;
+}
+
+.document-upload__expanded::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.document-upload__expanded::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+}
+
+/* ---- Upload zones (inside expanded area) ---- */
+
+.document-upload__zone {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-md);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;

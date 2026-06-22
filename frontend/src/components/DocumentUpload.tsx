@@ -13,6 +13,7 @@ interface DocumentUploadProps {
   send: (msg: WSMessage) => void;
   sessionId: string;
   visible: boolean;
+  collapsed: boolean;
   jdZone: UploadZoneState;
   resumeZone: UploadZoneState;
   onUploadStart: (docType: 'jd' | 'resume', filename: string) => void;
@@ -21,17 +22,16 @@ interface DocumentUploadProps {
 /**
  * Dual-zone document upload component for the Interview Agent.
  *
- * Two independent drop zones — one for the JD (job description),
- * one for the candidate's resume. Accepts PDF and DOCX files only.
- * Uses native HTML5 Drag & Drop (no library dependency).
- *
- * State is managed by the parent (App.tsx) which handles
- * document_parsed server responses.
+ * Two independent drop zones. In collapsed mode, shows a slim vertical
+ * tab with status dots. Parent handles the slide animation and
+ * expand-on-click behavior.
+ * Overlays the video area without resizing it.
  */
 export function DocumentUpload({
   send,
   sessionId,
   visible,
+  collapsed,
   jdZone,
   resumeZone,
   onUploadStart,
@@ -42,11 +42,9 @@ export function DocumentUpload({
   const handleFile = (docType: 'jd' | 'resume', file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext !== 'pdf' && ext !== 'docx' && ext !== 'doc') {
-      // Notify parent of invalid format
-      onUploadStart(docType, ''); // empty filename signals error
+      onUploadStart(docType, '');
       return;
     }
-
     onUploadStart(docType, file.name);
 
     const reader = new FileReader();
@@ -120,10 +118,30 @@ export function DocumentUpload({
 
   if (!visible) return null;
 
+  const panelClass = [
+    'document-upload',
+    collapsed ? 'document-upload--collapsed' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className="document-upload">
-      {renderZone('上传 JD (职位描述)', '📄', jdZone, 'jd', jdInputRef)}
-      {renderZone('上传简历', '👤', resumeZone, 'resume', resumeInputRef)}
+    <div className={panelClass}>
+      {/* Collapsed tab: slim vertical bar with icons */}
+      <div className="document-upload__collapsed-tab">
+        <div className="document-upload__collapsed-item">
+          <span>📄</span>
+          <span className={`document-upload__collapsed-dot document-upload__collapsed-dot--${jdZone.status}`} />
+        </div>
+        <div className="document-upload__collapsed-item">
+          <span>👤</span>
+          <span className={`document-upload__collapsed-dot document-upload__collapsed-dot--${resumeZone.status}`} />
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      <div className="document-upload__expanded">
+        {renderZone('上传 JD (职位描述)', '📄', jdZone, 'jd', jdInputRef)}
+        {renderZone('上传简历', '👤', resumeZone, 'resume', resumeInputRef)}
+      </div>
     </div>
   );
 }
