@@ -17,6 +17,7 @@
 | 2026-06-13 | PR 7 — TTS 质量升级：Piper → sherpa-onnx ✅ | [2026-06-13-pr7-kokoro-tts.md](2026-06-13-pr7-kokoro-tts.md) |
 | 2026-06-14 | PR 8 — 系统提示词 + 沉浸式对话体验 ✅ | [2026-06-14-pr8-system-prompt.md](2026-06-14-pr8-system-prompt.md) |
 | 2026-06-14 | PR 9 — 前端 UI 终极优化：Canvas 背景 + 玻璃按钮 ✅ | [2026-06-14-pr9-frontend-ui-final.md](2026-06-14-pr9-frontend-ui-final.md) |
+| 2026-06-22 | **PR 10 — AI Provider 抽象层 + 阿里云百炼 HTTP 集成 ✅** | [2026-06-22-pr10-ai-provider-abstraction.md](2026-06-22-pr10-ai-provider-abstraction.md) |
 
 ---
 

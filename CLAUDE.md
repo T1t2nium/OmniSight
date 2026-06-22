@@ -1,6 +1,6 @@
 # OmniSight — AI Visual Conversation Assistant
 
-> 基于浏览器的 AI 视觉对话助手。前端 React + TypeScript，后端 Python FastAPI，AI 引擎 Ollama 本地模型。
+> 基于浏览器的 AI 视觉对话助手。前端 React + TypeScript，后端 Python FastAPI，支持 Ollama 本地模型 / 阿里云百炼云端模型双引擎。
 
 ## 工作流程
 
@@ -13,7 +13,8 @@
 
 | 文档 | 路径 | 说明 |
 |------|------|------|
-| 项目计划 | `.claude/plans/ai-ai-graceful-twilight.md` | 完整实施计划 |
+| 项目计划 | `.claude/plans/ai-ai-graceful-twilight.md` | 原始实施计划 (PR 1-9) |
+| 升级计划 | `.claude/plans/ai-qwen3-5-2b-bf16-llm-qwen3-5-omni-plu-bubbly-narwhal.md` | 百炼升级 + 企业海面Agent (PR 10-16) |
 | 功能需求 | [docs/requirements.md](docs/requirements.md) | 功能与非功能需求 |
 | 技术栈 | [docs/tech-stack.md](docs/tech-stack.md) | 技术选型与版本 |
 | 系统架构 | [docs/architecture.md](docs/architecture.md) | 架构图与数据流 |
@@ -28,7 +29,10 @@
 
 - **后端入口**：[backend/app/main.py](backend/app/main.py) — FastAPI 应用
 - **WebSocket 处理**：[backend/app/routes/ws.py](backend/app/routes/ws.py) — 核心通信枢纽
-- **AI 集成**：[backend/app/services/ollama_client.py](backend/app/services/ollama_client.py) — Ollama 模型调用
+- **AI 抽象层**：[backend/app/services/base_ai_client.py](backend/app/services/base_ai_client.py) — AI Provider 统一接口
+- **AI — Ollama**：[backend/app/services/ollama_client.py](backend/app/services/ollama_client.py) — Ollama 本地模型
+- **AI — 百炼**：[backend/app/services/bailian_http_client.py](backend/app/services/bailian_http_client.py) — 阿里云百炼云端模型
+- **语音识别**：[backend/app/services/transcriber.py](backend/app/services/transcriber.py) — faster-whisper (ModelScope下载+CUDA)
 - **TTS 引擎**：[backend/app/services/sherpa_tts.py](backend/app/services/sherpa_tts.py) — sherpa-onnx (默认)
 - **TTS 后备**：[backend/app/services/tts.py](backend/app/services/tts.py) — Piper TTS (后备)
 - **前端入口**：[frontend/src/main.tsx](frontend/src/main.tsx) — React 应用
