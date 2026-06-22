@@ -28,6 +28,8 @@ class SessionState:
     ai_status: str = "idle"  # idle | listening | thinking | speaking
     # PR 8: multi-turn conversation history
     history: list[dict] = field(default_factory=list)
+    # PR 11: selected agent for this session
+    selected_agent: str = "chat"
 
 
 class ConnectionStateManager:

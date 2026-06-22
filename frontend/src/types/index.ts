@@ -82,6 +82,22 @@ export interface InterruptPayload {
   reason: string;
 }
 
+// ---- PR 11: Agent Payloads (Server → Client & Client → Server) ----
+
+export interface AgentInfo {
+  agent_id: string;
+  name: string;
+  description: string;
+}
+
+export interface AgentListPayload {
+  agents: AgentInfo[];
+}
+
+export interface AgentSelectPayload {
+  agent_id: string;
+}
+
 // ---- UI State Types ----
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';

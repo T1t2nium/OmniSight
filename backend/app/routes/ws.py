@@ -24,11 +24,14 @@ from app.models.schemas import (
     ErrorPayload,
     AIStatusPayload,
     InterruptPayload,
+    AgentListPayload,
+    AgentInfo,
 )
 from app.models.state import ConnectionStateManager
 from app.services.audio import AudioBufferManager
 from app.services.conversation import ConversationOrchestrator
 from app.services.frame_manager import FrameMotionDetector
+from app.agents.base import AgentRegistry
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -68,6 +71,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     websocket, session_id, "connected",
                     f"Session {session_id} registered",
                 )
+                # PR 11: Send available agent list
+                agents = AgentRegistry.list_agents()
+                agent_list = AgentListPayload(
+                    agents=[AgentInfo(**a) for a in agents]
+                )
+                await _send_message(websocket, session_id, "agent_list", agent_list.model_dump())
                 logger.info("Session registered: %s", session_id)
                 # PR 5: Start heartbeat for this session
                 heartbeat_task = asyncio.create_task(
@@ -90,6 +99,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _handle_video_frame(websocket, session_id, payload)
                 elif msg_type == "vad_event":
                     await _handle_vad_event(websocket, session_id, payload)
+                elif msg_type == "agent_select":
+                    await _handle_agent_select(websocket, session_id, payload)
                 else:
                     await _send_error(websocket, session_id,
                                       f"Unknown message type: {msg_type}")
@@ -228,6 +239,26 @@ async def _handle_vad_event(
     await _send_message(ws, session_id, "echo", echo.model_dump())
 
 
+# ---- Agent Selection ----
+
+
+async def _handle_agent_select(
+    ws: WebSocket, session_id: str, payload: dict
+) -> None:
+    """Handle agent selection from the frontend.
+
+    Stores the selected agent_id in session state so the AI pipeline
+    can use the correct system prompt.
+    """
+    agent_id = payload.get("agent_id", "chat")
+    session = await state_manager.get(session_id)
+    if session:
+        session.selected_agent = agent_id
+        logger.info("Session %s selected agent: %s", session_id, agent_id)
+    echo = EchoPayload(received_type="agent_select")
+    await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
 # ---- AI Pipeline ----
 
 
@@ -270,6 +301,12 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
     history: list[dict] = session.history.copy() if session and session.history else []
     logger.debug("Loaded history for %s: %d messages", session_id, len(history))
 
+    # PR 11: look up agent system_prompt for this session
+    agent_id = session.selected_agent if session else "chat"
+    agent = AgentRegistry.get(agent_id)
+    system_prompt = agent.system_prompt if agent else None
+    logger.debug("Session %s agent=%s, has_system_prompt=%s", session_id, agent_id, bool(system_prompt))
+
     task = asyncio.create_task(
         orchestrator.process_utterance(
             pcm_bytes=pcm_bytes,
@@ -278,6 +315,7 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
             history=history,
             send_fn=send_msg,
             status_fn=send_status,
+            system_prompt=system_prompt,
         )
     )
     _running_tasks[session_id] = task

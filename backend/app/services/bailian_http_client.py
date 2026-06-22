@@ -65,6 +65,7 @@ class BailianHTTPClient(BaseAIClient):
         transcript: str,
         image_base64: str | None = None,
         history: list[dict] | None = None,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[dict]:
         """Stream a chat completion from Bailian DashScope.
 
@@ -75,6 +76,8 @@ class BailianHTTPClient(BaseAIClient):
             transcript: The user's transcribed speech text.
             image_base64: Optional base64-encoded JPEG for vision.
             history: Previous conversation messages for multi-turn context.
+            system_prompt: Optional system prompt override. Falls back to
+                the default SYSTEM_PROMPT if not provided.
 
         Yields:
             dict with keys:
@@ -87,10 +90,11 @@ class BailianHTTPClient(BaseAIClient):
         # Build DashScope-format messages
         messages: list[dict] = []
 
-        # System prompt
+        # Use provided system prompt or fall back to default
+        prompt = system_prompt or SYSTEM_PROMPT
         messages.append({
             "role": "system",
-            "content": [{"text": SYSTEM_PROMPT}],
+            "content": [{"text": prompt}],
         })
 
         # History (keep last 4 exchanges = 8 messages)

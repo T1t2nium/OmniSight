@@ -72,6 +72,7 @@ class ConversationOrchestrator:
         history: list[dict] | None,
         send_fn: Callable[[str, dict], Awaitable[None]],
         status_fn: Callable[[str], Awaitable[None]],
+        system_prompt: str | None = None,
     ) -> list[dict]:
         """Run the full AI pipeline on a single user utterance.
 
@@ -80,9 +81,13 @@ class ConversationOrchestrator:
         2. Convert PCM16 → float32 numpy array
         3. Transcribe via faster-whisper (in thread pool)
         4. Send transcript to frontend
-        5. Stream Ollama response as llm_response deltas, detect sentences
+        5. Stream LLM response as llm_response deltas, detect sentences
         6. Concurrent TTS synthesis for collected sentences
         7. Send 'idle' status on completion
+
+        Args:
+            system_prompt: Optional system prompt override for the AI client.
+                If None, the client uses its default system prompt.
 
         Returns:
             Updated conversation history for the next turn.
@@ -169,7 +174,8 @@ class ConversationOrchestrator:
                 for attempt in range(2):
                     try:
                         async for chunk in self._ai_client.chat(
-                            text, image_base64=latest_frame_b64, history=history
+                            text, image_base64=latest_frame_b64, history=history,
+                            system_prompt=system_prompt,
                         ):
                             full_response += chunk["delta"]
                             tts_pending_text += chunk["delta"]

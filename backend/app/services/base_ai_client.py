@@ -39,6 +39,7 @@ class BaseAIClient(ABC):
         transcript: str,
         image_base64: str | None = None,
         history: list[dict] | None = None,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[dict]:
         """Stream a chat completion from the AI provider.
 
@@ -46,6 +47,8 @@ class BaseAIClient(ABC):
             transcript: The user's transcribed speech text.
             image_base64: Optional base64-encoded JPEG for vision models.
             history: Previous conversation messages for multi-turn context.
+            system_prompt: Optional system prompt override. If None, the
+                provider falls back to its default system prompt.
 
         Yields:
             dict with keys:
