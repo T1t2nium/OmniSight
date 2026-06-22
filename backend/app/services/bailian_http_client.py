@@ -159,33 +159,32 @@ class BailianHTTPClient(BaseAIClient):
                 raw_lines = 0
                 async for line in response.aiter_lines():
                     raw_lines += 1
-                    if raw_lines <= 3:
-                        logger.info("Bailian raw line %d: %s", raw_lines, line[:300])
 
                     if not line:
                         continue
 
-                    # SSE format: "data: <json>"
-                    if not line.startswith("data:"):
-                        logger.debug("Bailian: non-data line: %s", line[:100])
-                        continue
-
-                    data_str = line[5:].strip()
-                    if not data_str:
-                        continue
+                    # Parse JSON — Bailian returns raw JSON lines (not SSE data: prefix).
+                    # Some endpoints may wrap in "data:" though, so strip if present.
+                    data_str = line
+                    if line.startswith("data:"):
+                        data_str = line[5:].strip()
+                        if not data_str:
+                            continue
 
                     try:
                         data = json.loads(data_str)
                     except json.JSONDecodeError:
                         logger.warning(
-                            "Bailian: unparseable SSE line: %s", line[:100]
+                            "Bailian: unparseable line %d: %s",
+                            raw_lines, line[:100],
                         )
                         continue
 
-                    if raw_lines <= 3:
-                        logger.info("Bailian parsed JSON keys: %s", list(data.keys())[:10])
-                        if "output" in data:
-                            logger.info("Bailian output keys: %s", list(data["output"].keys())[:10])
+                    if raw_lines == 1:
+                        logger.info(
+                            "Bailian response keys: %s",
+                            list(data.keys())[:10],
+                        )
 
                     # Extract incremental text from the DashScope response
                     output = data.get("output", {})
