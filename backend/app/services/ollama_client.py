@@ -1,4 +1,8 @@
-"""Ollama HTTP API client with NDJSON streaming support."""
+"""Ollama HTTP API client with NDJSON streaming support.
+
+Implements the BaseAIClient protocol so ConversationOrchestrator can
+treat all LLM providers uniformly.
+"""
 
 import asyncio
 import json
@@ -7,10 +11,12 @@ from typing import AsyncIterator
 
 import httpx
 
+from app.services.base_ai_client import BaseAIClient
+
 logger = logging.getLogger(__name__)
 
 
-class OllamaClient:
+class OllamaClient(BaseAIClient):
     """Async HTTP client for Ollama's /api/chat endpoint.
 
     Uses httpx.AsyncClient for non-blocking I/O. Parses the NDJSON
@@ -21,6 +27,20 @@ class OllamaClient:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0))
+
+    # ---- BaseAIClient interface properties ----
+
+    @property
+    def model(self) -> str:
+        """Return the model identifier (e.g. 'qwen3.5:2b-bf16')."""
+        return self._model
+
+    @property
+    def provider_name(self) -> str:
+        """Return a human-readable provider name for logging."""
+        return "ollama"
+
+    # ---- Core API ----
 
     async def chat(
         self,

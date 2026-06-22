@@ -16,7 +16,7 @@ import httpx
 import numpy as np
 
 from app.services.transcriber import AudioTranscriber
-from app.services.ollama_client import OllamaClient
+from app.services.base_ai_client import BaseAIClient
 from app.services.tts import PiperTTS, split_sentences
 from app.services.sherpa_tts import SherpaTTS
 
@@ -48,11 +48,11 @@ class ConversationOrchestrator:
     def __init__(
         self,
         transcriber: AudioTranscriber,
-        ollama: OllamaClient,
+        ai_client: BaseAIClient,
         tts: PiperTTS | SherpaTTS | None = None,
     ) -> None:
         self._transcriber = transcriber
-        self._ollama = ollama
+        self._ai_client = ai_client
         self._tts = tts
 
     @property
@@ -134,7 +134,7 @@ class ConversationOrchestrator:
             # first sentence while the LLM may still be generating later ones.
             await status_fn("speaking")
             t2 = time.perf_counter()
-            logger.debug("Timing: setup before Ollama took %.3fs", t2 - t1)
+            logger.debug("Timing: setup before LLM took %.3fs", t2 - t1)
             full_response = ""
             tts_pending_text = ""
 
@@ -158,16 +158,17 @@ class ConversationOrchestrator:
                 worker_task = asyncio.create_task(_tts_worker())
 
             try:
-                # PR 5: Retry once on transient Ollama errors
+                # PR 5: Retry once on transient LLM errors
                 t3 = time.perf_counter()
                 logger.info(
-                    "Starting Ollama chat (image=%s, %.1f KB)",
+                    "Starting LLM chat (provider=%s, image=%s, %.1f KB)",
+                    self._ai_client.provider_name,
                     "yes" if latest_frame_b64 else "no",
                     len(latest_frame_b64) / 1024 if latest_frame_b64 else 0,
                 )
                 for attempt in range(2):
                     try:
-                        async for chunk in self._ollama.chat(
+                        async for chunk in self._ai_client.chat(
                             text, image_base64=latest_frame_b64, history=history
                         ):
                             full_response += chunk["delta"]
@@ -188,7 +189,7 @@ class ConversationOrchestrator:
                     except (httpx.TimeoutException, httpx.ConnectError) as e:
                         if attempt == 0:
                             logger.warning(
-                                "Ollama transient error — retrying in 1s: %s", e
+                                "LLM transient error — retrying in 1s: %s", e
                             )
                             await asyncio.sleep(1)
                         else:

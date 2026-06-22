@@ -17,11 +17,15 @@ class Settings(BaseSettings):
     )
 
     # AI provider
-    ai_provider: Literal["ollama", "gemini"] = "ollama"
+    ai_provider: Literal["ollama", "bailian", "gemini"] = "ollama"
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3:12b"
+
+    # Alibaba Cloud Bailian (百炼) — DashScope multimodal generation
+    bailian_api_key: str = ""  # DashScope API key (sk-...)
+    bailian_model: str = "qwen3.5-omni-plus-2026-03-15"
 
     # Gemini (optional — future use)
     gemini_api_key: str = ""
