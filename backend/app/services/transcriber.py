@@ -1,4 +1,8 @@
-"""faster-whisper speech-to-text wrapper — CPU-bound, runs in thread pool."""
+"""faster-whisper speech-to-text wrapper — CPU-bound, runs in thread pool.
+
+Downloads models from ModelScope (魔搭, China-native, fast) with automatic
+fallback to HuggingFace for users outside China.
+"""
 
 import asyncio
 import logging
@@ -9,15 +13,18 @@ from faster_whisper import WhisperModel
 
 logger = logging.getLogger(__name__)
 
+# ModelScope model IDs for faster-whisper (same files as HF, hosted in China)
+_MODELSCOPE_REPO = "keepitsimple/faster-whisper-{model_size}"
+
 
 class AudioTranscriber:
     """Wraps faster-whisper WhisperModel for async transcription.
 
+    Downloads models via ModelScope by default (fast in China).
+    Falls back to HuggingFace if ModelScope is unavailable.
+
     The model runs synchronously and blocks the GIL, so all transcription
     calls are dispatched via asyncio.to_thread.
-
-    Set HF_ENDPOINT env var or hf_endpoint in .env to use a mirror
-    (e.g. https://hf-mirror.com for users in China).
     """
 
     def __init__(
@@ -25,30 +32,61 @@ class AudioTranscriber:
         model_size: str = "base",
         language: str | None = None,
         device: str = "cpu",
-        hf_endpoint: str | None = None,
+        use_modelscope: bool = True,
     ) -> None:
-        # Apply HF mirror BEFORE creating WhisperModel (CTranslate2 reads
-        # HF_ENDPOINT from the environment when downloading model files).
-        if hf_endpoint:
-            os.environ.setdefault("HF_ENDPOINT", hf_endpoint)
-            logger.info("Using HF endpoint: %s", hf_endpoint)
-
-        # Enable faster Rust-based downloads if available
-        os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
-
         self._model_size = model_size
         compute_type = "float16" if device == "cuda" else "auto"
-        logger.info(
-            "Loading faster-whisper model '%s' (device=%s, compute_type=%s)...",
-            model_size, device, compute_type,
-        )
 
-        # WhisperModel handles downloading automatically via CTranslate2.
-        # On first run, model.bin (~3GB for large-v3) will be downloaded
-        # from HuggingFace. Set HF_ENDPOINT to a mirror for faster downloads.
-        self._model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        # — Try ModelScope download first —
+        model_path: str | None = None
+        if use_modelscope:
+            model_path = self._download_from_modelscope(model_size)
+
+        if model_path:
+            logger.info("Loading from ModelScope cache: %s", model_path)
+        else:
+            logger.info(
+                "Loading faster-whisper '%s' via HuggingFace (device=%s, compute_type=%s)...",
+                model_size, device, compute_type,
+            )
+
+        self._model = WhisperModel(
+            model_path or model_size,
+            device=device,
+            compute_type=compute_type,
+        )
         self._language = language
         logger.info("faster-whisper model ready")
+
+    def _download_from_modelscope(self, model_size: str) -> str | None:
+        """Download model from ModelScope. Returns local path or None."""
+        try:
+            from modelscope.hub import snapshot_download
+        except ImportError:
+            logger.info("ModelScope SDK not installed, using HuggingFace")
+            return None
+
+        repo_id = _MODELSCOPE_REPO.format(model_size=model_size)
+        cache_dir = os.path.join(
+            os.path.expanduser("~"), ".cache", "modelscope", "hub"
+        )
+        try:
+            logger.info(
+                "Downloading faster-whisper '%s' from ModelScope: %s",
+                model_size, repo_id,
+            )
+            model_dir = snapshot_download(
+                repo_id,
+                cache_dir=cache_dir,
+            )
+            logger.info("ModelScope download complete: %s", model_dir)
+            return model_dir
+        except Exception as exc:
+            logger.warning(
+                "ModelScope download failed (%s), falling back to HuggingFace",
+                exc,
+            )
+            return None
 
     async def transcribe(
         self, audio: np.ndarray
@@ -66,7 +104,6 @@ class AudioTranscriber:
             self._model.transcribe,
             audio,
             language=self._language,
-            # Disable language-biased thresholds that filter out Chinese speech.
             no_speech_threshold=None,
             log_prob_threshold=None,
             compression_ratio_threshold=None,

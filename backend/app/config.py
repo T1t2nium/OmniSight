@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     whisper_model: str = "base"
     whisper_language: str | None = None  # None = auto-detect
     whisper_device: str = "cpu"  # "cpu" or "cuda" (GPU加速，需NVIDIA GPU+CUDA Toolkit)
-    hf_endpoint: str = ""  # HF 镜像站，国内可设为 https://hf-mirror.com
 
     # Server
     ws_host: str = "0.0.0.0"

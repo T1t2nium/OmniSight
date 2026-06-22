@@ -48,7 +48,6 @@ async def lifespan(app: FastAPI):
         settings.whisper_model,
         settings.whisper_language,
         settings.whisper_device,
-        settings.hf_endpoint if settings.hf_endpoint else None,
     )
 
     # Initialize AI client based on provider setting

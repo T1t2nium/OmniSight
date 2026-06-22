@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings>=2.14.1",
     "sherpa-onnx>=1.13",
     "onnxruntime>=1.20",
+    "modelscope>=1.23",
 ]
 
 [tool.uv]
