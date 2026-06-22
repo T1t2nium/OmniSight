@@ -355,11 +355,27 @@ function App() {
 
       <main className="app-main">
         <div className="layout-top">
-          <VideoPanel
-            stream={media.stream}
-            cameraEnabled={media.cameraEnabled}
-            streamVersion={media.streamVersion}
-          />
+          <div className="layout-top__video">
+            <VideoPanel
+              stream={media.stream}
+              cameraEnabled={media.cameraEnabled}
+              streamVersion={media.streamVersion}
+            />
+          </div>
+          <div
+            className={`layout-top__side${
+              agent.uiConfig.show_document_upload ? ' layout-top__side--open' : ''
+            }`}
+          >
+            <DocumentUpload
+              send={ws.send}
+              sessionId={sessionIdRef.current}
+              visible={agent.uiConfig.show_document_upload}
+              jdZone={jdZone}
+              resumeZone={resumeZone}
+              onUploadStart={handleUploadStart}
+            />
+          </div>
         </div>
 
         <div className="layout-status">
@@ -386,15 +402,6 @@ function App() {
           )}
         </div>
 
-        {/* PR 13: Interview Agent — Document Upload + Question Bank */}
-        <DocumentUpload
-          send={ws.send}
-          sessionId={sessionIdRef.current}
-          visible={agent.uiConfig.show_document_upload}
-          jdZone={jdZone}
-          resumeZone={resumeZone}
-          onUploadStart={handleUploadStart}
-        />
         <QuestionBank
           bank={questionBank}
           visible={agent.uiConfig.show_question_bank}
