@@ -44,22 +44,22 @@ def _make_audio_chunk(session_id: str, wav_data: bytes) -> dict:
 
 
 def test_session_lifecycle():
-    """Connect → receive server_status → agent_list → echo → disconnect."""
+    """Connect → receive agent_list → server_status → echo → disconnect."""
     client = TestClient(app)
     with client.websocket_connect("/ws") as ws:
         sid = f"test-life-{uuid.uuid4().hex[:8]}"
 
+        # PR 11: agent_list sent immediately on connect
+        resp_agent = ws.receive_json()
+        assert resp_agent["type"] == "agent_list"
+
         # Send any valid message to trigger registration
         ws.send_json(_make_msg("vad_event", sid, {"event": "speech_start"}))
 
-        # First message should be server_status
+        # server_status after registration
         resp = ws.receive_json()
         assert resp["type"] == "server_status"
         assert resp["payload"]["status"] == "connected"
-
-        # PR 11: agent_list sent after registration
-        resp_agent = ws.receive_json()
-        assert resp_agent["type"] == "agent_list"
 
         # Then echo for vad_event
         resp2 = ws.receive_json()
@@ -71,16 +71,20 @@ def test_unknown_message_type_returns_error():
     client = TestClient(app)
     with client.websocket_connect("/ws") as ws:
         sid = f"test-unk-{uuid.uuid4().hex[:8]}"
+
+        # PR 11: agent_list sent immediately on connect
+        resp_agent = ws.receive_json()
+        assert resp_agent["type"] == "agent_list"
+
         ws.send_json(_make_msg("bogus_type", sid))
 
-        # Should get server_status → agent_list (PR 11) → error
+        # Should get server_status → error
         msgs = []
-        for _ in range(3):
+        for _ in range(2):
             msgs.append(ws.receive_json())
 
         types = [m["type"] for m in msgs]
         assert "server_status" in types
-        assert "agent_list" in types
         assert "error" in types
 
 
@@ -89,13 +93,19 @@ def test_audio_chunk_echo(silent_wav_ieee_float):
     client = TestClient(app)
     with client.websocket_connect("/ws") as ws:
         sid = f"test-aud-{uuid.uuid4().hex[:8]}"
+
+        # PR 11: agent_list arrives immediately on connect
+        msg = ws.receive_json()
+        assert msg["type"] == "agent_list"
+
         ws.send_json(_make_audio_chunk(sid, silent_wav_ieee_float))
 
-        # Skip server_status and agent_list (PR 11)
+        # server_status after registration
         msg = ws.receive_json()
-        while msg["type"] in ("server_status", "agent_list"):
-            msg = ws.receive_json()
+        assert msg["type"] == "server_status"
 
+        # echo for audio_chunk
+        msg = ws.receive_json()
         assert msg["type"] == "echo"
         assert msg["payload"]["received_type"] == "audio_chunk"
         assert msg["payload"]["duration_ms"] == 60
@@ -138,9 +148,9 @@ def test_video_frame_echo():
             "height": 480,
         }))
 
-        # Collect all messages (2 frames → server_status + 2 echoes = 3 msgs)
+        # Collect all messages (agent_list + server_status + 2 echoes = 4 msgs)
         msgs = []
-        for _ in range(3):
+        for _ in range(4):
             msgs.append(ws.receive_json())
 
         echoes = [m for m in msgs if m["type"] == "echo"]
@@ -156,6 +166,12 @@ def test_session_isolation():
     ):
         sid_a = f"test-iso-a-{uuid.uuid4().hex[:8]}"
         sid_b = f"test-iso-b-{uuid.uuid4().hex[:8]}"
+
+        # PR 11: agent_list arrives immediately on both connections
+        agent_a = ws_a.receive_json()
+        agent_b = ws_b.receive_json()
+        assert agent_a["type"] == "agent_list"
+        assert agent_b["type"] == "agent_list"
 
         ws_a.send_json(_make_msg("vad_event", sid_a, {"event": "speech_start"}))
         ws_b.send_json(_make_msg("vad_event", sid_b, {"event": "speech_start"}))
@@ -173,6 +189,10 @@ def test_missing_session_id():
     """Messages without session_id get an error."""
     client = TestClient(app)
     with client.websocket_connect("/ws") as ws:
+        # PR 11: agent_list arrives immediately on connect
+        resp_agent = ws.receive_json()
+        assert resp_agent["type"] == "agent_list"
+
         ws.send_json({"type": "vad_event", "payload": {}})
 
         resp = ws.receive_json()
