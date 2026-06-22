@@ -15,12 +15,13 @@ class AudioTranscriber:
     dispatched via asyncio.to_thread to avoid stalling the event loop.
     """
 
-    def __init__(self, model_size: str = "base", language: str | None = None) -> None:
+    def __init__(self, model_size: str = "base", language: str | None = None, device: str = "cpu") -> None:
         logger.info(
-            "Loading faster-whisper model '%s' (device=cpu, compute_type=auto)...",
-            model_size,
+            "Loading faster-whisper model '%s' (device=%s, compute_type=auto)...",
+            model_size, device,
         )
-        self._model = WhisperModel(model_size, device="cpu", compute_type="auto")
+        compute_type = "float16" if device == "cuda" else "auto"
+        self._model = WhisperModel(model_size, device=device, compute_type=compute_type)
         self._language = language
         logger.info("faster-whisper model ready")
 

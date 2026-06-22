@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         settings.whisper_model,
         settings.whisper_language or "auto",
     )
-    transcriber = AudioTranscriber(settings.whisper_model, settings.whisper_language)
+    transcriber = AudioTranscriber(settings.whisper_model, settings.whisper_language, settings.whisper_device)
 
     # Initialize AI client based on provider setting
     ai_client: BaseAIClient

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # Speech recognition
     whisper_model: str = "base"
     whisper_language: str | None = None  # None = auto-detect
+    whisper_device: str = "cpu"  # "cpu" or "cuda" (GPU加速，需NVIDIA GPU+CUDA Toolkit)
 
     # Server
     ws_host: str = "0.0.0.0"
