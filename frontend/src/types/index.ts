@@ -161,6 +161,17 @@ export interface QuestionBankPayload {
   generated_at: string;
 }
 
+// ---- PR 14: Interview During Payloads ----
+
+export interface InterviewStartedPayload {
+  phase: string;
+}
+
+export interface InterviewStoppedPayload {
+  transcript: Record<string, unknown>[];
+  message: string;
+}
+
 // ---- UI State Types ----
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';

@@ -8,6 +8,11 @@ PR 3 additions:
 - vad_event(speech_end) launches AI pipeline as a background task.
 - New server→client message types: transcript, llm_response, ai_status.
 - Background tasks are tracked per-session and cancelled on disconnect.
+
+PR 14 additions:
+- start_interview / stop_interview handlers for InterviewAgent realtime mode.
+- interview_active sessions route audio to DuringInterviewEngine instead of pipeline.
+- Per-session interview event loop relays Bailian Realtime events to frontend.
 """
 
 import asyncio
@@ -27,15 +32,19 @@ from app.models.schemas import (
     AgentListPayload,
     AgentInfo,
     DocumentParsedPayload,
+    InterviewStartedPayload,
+    InterviewStoppedPayload,
 )
 from app.models.state import ConnectionStateManager
-from app.models.interview import JDEntities, ResumeEntities, MatchResult
+from app.models.interview import JDEntities, ResumeEntities, MatchResult, QuestionBank
 from app.services.audio import AudioBufferManager
 from app.services.conversation import ConversationOrchestrator
 from app.services.frame_manager import FrameMotionDetector
 from app.services.document_parser import DocumentParser
 from app.services.entity_extractor import EntityExtractor
 from app.services.question_generator import QuestionGenerator
+from app.services.bailian_ws_client import BailianWSClient
+from app.services.interview_engine import DuringInterviewEngine
 from app.agents.base import AgentRegistry
 from app.config import get_settings
 
@@ -50,6 +59,9 @@ motion_detector = FrameMotionDetector()  # PR 5
 
 # Map of session_id → running AI task (for cancellation on disconnect or new utterance)
 _running_tasks: dict[str, asyncio.Task] = {}
+
+# Map of session_id → interview event loop task (PR 14)
+_interview_tasks: dict[str, asyncio.Task] = {}
 
 
 @router.websocket("/ws")
@@ -113,6 +125,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _handle_document_upload(websocket, session_id, payload)
                 elif msg_type == "reset_conversation":
                     await _handle_reset_conversation(websocket, session_id)
+                elif msg_type == "start_interview":
+                    await _handle_start_interview(websocket, session_id, payload)
+                elif msg_type == "stop_interview":
+                    await _handle_stop_interview(websocket, session_id)
                 else:
                     await _send_error(websocket, session_id,
                                       f"Unknown message type: {msg_type}")
@@ -145,6 +161,25 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if task and not task.done():
                 task.cancel()
                 logger.info("Cancelled AI pipeline for %s", session_id)
+
+            # PR 14: Clean up interview session
+            iv_task = _interview_tasks.pop(session_id, None)
+            if iv_task and not iv_task.done():
+                iv_task.cancel()
+                logger.info("Cancelled interview event loop for %s", session_id)
+            # Stop interview engine if active
+            session = await state_manager.get(session_id)
+            if session and session.interview_active:
+                engine = session.interview_engine
+                if engine:
+                    try:
+                        eng: DuringInterviewEngine = engine  # type: ignore[assignment]
+                        await eng.stop()
+                    except Exception:
+                        pass
+                session.interview_active = False
+                session.interview_engine = None
+
             await state_manager.remove(session_id)
             audio_manager.clear(session_id)
             logger.info("Session cleaned up: %s", session_id)
@@ -156,7 +191,26 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 async def _handle_audio_chunk(
     ws: WebSocket, session_id: str, payload: dict
 ) -> None:
-    """Decode base64 WAV, strip header, store PCM16, echo stats."""
+    """Decode base64 WAV, strip header, store PCM16, echo stats.
+
+    PR 14: In interview mode, relay audio directly to DuringInterviewEngine
+    instead of buffering for the AI pipeline.
+    """
+    # PR 14: interview mode — relay audio to Bailian Realtime
+    session = await state_manager.get(session_id)
+    if session and session.interview_active and session.interview_engine:
+        b64_data = payload.get("data", "")
+        if b64_data:
+            try:
+                raw_wav = base64.b64decode(b64_data)
+                pcm_data = _parse_wav_to_pcm16(raw_wav)
+                pcm_b64 = base64.b64encode(pcm_data).decode("ascii")
+                engine: DuringInterviewEngine = session.interview_engine  # type: ignore[assignment]
+                await engine.handle_audio_chunk(pcm_b64)
+            except Exception:
+                logger.exception("Failed to relay audio to interview engine")
+        return
+
     b64_data = payload.get("data", "")
     duration_ms = payload.get("duration_ms", 0)
 
@@ -226,9 +280,19 @@ async def _handle_vad_event(
     """Handle VAD events. On speech_end, launch the AI pipeline.
 
     PR 4: speech_start during active AI pipeline cancels it (barge-in).
+    PR 14: In interview mode, speech_start triggers barge-in on Bailian Realtime.
     """
     event = payload.get("event", "unknown")
     logger.info("VAD %s [%s]", event, session_id)
+
+    # PR 14: interview mode — relay VAD to interview engine
+    session = await state_manager.get(session_id)
+    if session and session.interview_active and session.interview_engine:
+        if event == "speech_start":
+            engine: DuringInterviewEngine = session.interview_engine  # type: ignore[assignment]
+            await engine.handle_interrupt()
+        # Bailian server_vad handles speech_end internally — no action needed
+        return
 
     if event == "speech_start":
         # Clear any residual audio from previous VAD cycle
@@ -293,6 +357,188 @@ async def _handle_reset_conversation(
         logger.info("Session %s conversation reset (history cleared)", session_id)
     echo = EchoPayload(received_type="reset_conversation")
     await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
+# ---- Interview During (PR 14) ----
+
+
+async def _handle_start_interview(
+    ws: WebSocket, session_id: str, payload: dict
+) -> None:
+    """Start a real-time interview session using Bailian Realtime WS.
+
+    Creates BailianWSClient → DuringInterviewEngine → event loop.
+    Sends interview_started to frontend on success.
+    """
+    session = await state_manager.get(session_id)
+    if not session:
+        await _send_error(ws, session_id, "Session not found")
+        return
+
+    if session.interview_active:
+        await _send_error(ws, session_id, "Interview already in progress")
+        return
+
+    settings = get_settings()
+
+    if not settings.bailian_api_key:
+        logger.warning(
+            "start_interview for %s: bailian_api_key is not set "
+            "— falling back to HTTP pipeline",
+            session_id,
+        )
+        await _send_error(
+            ws, session_id,
+            "Bailian API key not configured. "
+            "Set BAILIAN_API_KEY in .env for real-time interview mode.",
+        )
+        return
+
+    # Validate required interview data
+    if not session.question_bank:
+        await _send_error(ws, session_id,
+                          "No question bank — upload JD and resume first")
+        return
+
+    try:
+        # Reconstruct models from session dicts
+        bank = QuestionBank(**session.question_bank)
+        jd_entities = JDEntities(**(session.jd_entities or {}))
+        resume_entities = ResumeEntities(**(session.resume_entities or {}))
+        match_result = MatchResult(**(session.match_result or {}))
+
+        # Create Bailian client and engine
+        ws_client = BailianWSClient(
+            settings.bailian_api_key,
+            settings.bailian_model,
+        )
+        engine = DuringInterviewEngine(
+            ws_client=ws_client,
+            question_bank=bank,
+            jd_entities=jd_entities,
+            resume_entities=resume_entities,
+            match_result=match_result,
+        )
+
+        instructions = engine.build_instructions()
+        await engine.start(instructions)
+
+        # Store engine reference in session
+        session.interview_engine = engine  # type: ignore[assignment]
+        session.interview_active = True
+        session.interview_transcript = []
+
+        # Cancel any existing interview task for this session
+        existing = _interview_tasks.pop(session_id, None)
+        if existing and not existing.done():
+            existing.cancel()
+
+        # Build send callback
+        async def send_fn(msg_type: str, payload: dict) -> None:
+            await _send_message(ws, session_id, msg_type, payload)
+
+        # Start event loop
+        cancel_event = asyncio.Event()
+        task = asyncio.create_task(
+            _interview_event_loop(
+                ws, session_id, engine, send_fn, cancel_event,
+            )
+        )
+        _interview_tasks[session_id] = task
+
+        # Notify frontend
+        started = InterviewStartedPayload(phase="icebreaker")
+        await _send_message(ws, session_id, "interview_started", started.model_dump())
+
+        logger.info("Interview started for session %s", session_id)
+
+    except Exception:
+        logger.exception("Failed to start interview for %s", session_id)
+        # Cleanup partial state
+        if session.interview_engine:
+            try:
+                eng: DuringInterviewEngine = session.interview_engine  # type: ignore[assignment]
+                await eng.stop()
+            except Exception:
+                pass
+        session.interview_active = False
+        session.interview_engine = None
+        await _send_error(ws, session_id, "Failed to start interview")
+
+
+async def _handle_stop_interview(
+    ws: WebSocket, session_id: str
+) -> None:
+    """Stop the real-time interview and clean up.
+
+    Cancels the event loop, closes Bailian WS, saves transcript,
+    and notifies the frontend.
+    """
+    session = await state_manager.get(session_id)
+    if not session or not session.interview_active:
+        return
+
+    logger.info("Stopping interview for session %s", session_id)
+
+    # Cancel event loop
+    task = _interview_tasks.pop(session_id, None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    # Stop engine + close Bailian WS
+    engine: DuringInterviewEngine | None = session.interview_engine  # type: ignore[assignment]
+    if engine:
+        transcript = engine.transcript
+        try:
+            await engine.stop()
+        except Exception:
+            logger.exception("Error stopping interview engine")
+        session.interview_engine = None
+    else:
+        transcript = session.interview_transcript or []
+
+    session.interview_active = False
+    session.interview_transcript = transcript
+
+    # Notify frontend
+    stopped = InterviewStoppedPayload(
+        transcript=transcript,
+        message=f"Interview complete — {len(transcript)} turns recorded",
+    )
+    await _send_message(ws, session_id, "interview_stopped", stopped.model_dump())
+    logger.info("Interview stopped for session %s — %d transcript entries",
+                session_id, len(transcript))
+
+
+async def _interview_event_loop(
+    ws: WebSocket,
+    session_id: str,
+    engine: DuringInterviewEngine,
+    send_fn: Callable[[str, dict], Awaitable[None]],
+    cancel_event: asyncio.Event,
+) -> None:
+    """Background task: read events from DuringInterviewEngine and relay to frontend.
+
+    Runs until cancelled (user stops interview or disconnects).
+    """
+    logger.info("Interview event loop started for %s", session_id)
+    try:
+        async for mapped in engine.receive():
+            if cancel_event.is_set():
+                break
+            msg_type = mapped.get("type", "")
+            payload = mapped.get("payload", {})
+            await send_fn(msg_type, payload)
+    except asyncio.CancelledError:
+        logger.info("Interview event loop cancelled for %s", session_id)
+    except Exception:
+        logger.exception("Interview event loop error for %s", session_id)
+    finally:
+        logger.info("Interview event loop ended for %s", session_id)
 
 
 # ---- Document Upload & Interview Pipeline ----

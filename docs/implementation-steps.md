@@ -21,7 +21,7 @@
 | 11 | `phase/11-agent-framework` | Agent 框架 + Agent 选择器 UI ✅ | PR 10 |
 | 12 | `phase/12-document-parser` | 文档解析 + 实体提取服务 ✅ | PR 11 |
 | 13 | `phase/13-interview-agent-pre` | InterviewAgent 面试前 + 题库生成 ✅ | PR 12 |
-| 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR | PR 13 |
+| 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR ✅ | PR 13 |
 | 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 评分 + 报告 | PR 14 |
 | 16 | `phase/16-integration` | 端到端集成测试 + 文档完善 | PR 15 |
 
@@ -422,3 +422,28 @@
 - ✅ Agent 对话隔离：切换 Agent 清空 history，对话中禁止切换
 - ✅ 每次 Start → 新上下文，Stop → AgentSelector 恢复可切换
 - ✅ 面板不覆盖视频（flex row 并排），不遮挡聊天框
+
+---
+
+## PR 14: InterviewAgent 面试中 — 全双工语音 + STAR 追问
+
+### 任务清单
+
+- [x] 后端：`BailianWSClient` — 百炼 OmniRealtime WebSocket 客户端（全双工音频）
+- [x] 后端：`DuringInterviewEngine` — 面试进行中引擎（指令构建 + 事件中继）
+- [x] 后端：`ws.py` start/stop_interview handler + 面试事件循环 + audio/vad 路由
+- [x] 后端：`schemas.py` +2 Payload（InterviewStartedPayload / InterviewStoppedPayload）
+- [x] 后端：`SessionState` +3 字段（interview_active / interview_engine / interview_transcript）
+- [x] 后端：`pyproject.toml` 添加 `websockets>=14,<15` 依赖
+- [x] 后端：`main.py` version → 0.9.0
+- [x] 前端：types 扩展（InterviewStartedPayload / InterviewStoppedPayload）
+- [x] 前端：App.tsx 面试 start/stop 集成 + 阶段指示器
+- [x] 前端：App.css 面试 UI 样式（header 变体 + 阶段指示器动画）
+- [x] 测试：36 新增测试（BailianWSClient 11 + DuringInterviewEngine 25）
+
+### 验证标准
+
+- ✅ 116/116 测试全绿（+36 new）
+- ✅ `npx tsc --noEmit` 零类型错误
+- ✅ 现有 80 测试零回归
+- ✅ 降级路径：API Key 为空时返回友好错误

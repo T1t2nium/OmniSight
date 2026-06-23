@@ -41,6 +41,8 @@
 - **文档解析**：[backend/app/services/document_parser.py](backend/app/services/document_parser.py) — PDF/DOCX 文本提取
 - **实体提取**：[backend/app/services/entity_extractor.py](backend/app/services/entity_extractor.py) — JD/简历规则提取+匹配
 - **题库生成**：[backend/app/services/question_generator.py](backend/app/services/question_generator.py) — AI 分类题库生成
+- **百炼实时 WS**：[backend/app/services/bailian_ws_client.py](backend/app/services/bailian_ws_client.py) — 百炼 Realtime 全双工客户端
+- **面试引擎**：[backend/app/services/interview_engine.py](backend/app/services/interview_engine.py) — 面试进行中引擎
 - **前端入口**：[frontend/src/main.tsx](frontend/src/main.tsx) — React 应用
 - **前端组件**：[frontend/src/App.tsx](frontend/src/App.tsx) — 根组件
 - **Agent 选择器**：[frontend/src/components/AgentSelector.tsx](frontend/src/components/AgentSelector.tsx) — 玻璃态胶囊标签
