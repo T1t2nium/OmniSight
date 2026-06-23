@@ -403,13 +403,22 @@
 - [x] 前端：`useAgent` 扩展 — 暴露 `uiConfig` 用于条件渲染
 - [x] 前端：`App.tsx` 条件渲染 DocumentUpload + QuestionBank
 - [x] 前端：`App.css` 玻璃态样式（upload zones + question cards）
-- [x] 测试：11+11=22 新增测试（agent registration + WS messages + question generation）
+- [x] 前端：AgentSelector 重构为下拉菜单（玻璃态，对话中禁用锁定）
+- [x] 前端：DocumentUpload 并排布局（flex row，面板左边界对齐视频右边界，不覆盖）
+- [x] 前端：QuestionBank 修复遮挡聊天框（删入场动画，加 flex-shrink:0）
+- [x] 前端：`handleStartConversation` 发送 `reset_conversation` 清空后端历史
+- [x] 后端：`agent_select` 自动清空 `session.history`（Agent 上下文隔离）
+- [x] 后端：`reset_conversation` WS 消息处理（清空 history + interview 状态）
+- [x] 测试：11+11+1=23 新增测试（agent + question generator + reset_conversation）
 
 ### 验证标准
 
-- ✅ 79/79 测试全绿
+- ✅ 80/80 测试全绿
 - ✅ `npx tsc --noEmit` 零错误
 - ✅ InterviewAgent 注册成功，agent_list 含 2 个 agent（chat + interview）
 - ✅ document_upload → document_parsed → question_bank 端到端流程
 - ✅ 题库 AI 解析失败时降级兜底
 - ✅ 前端 Agent 切换时 DocumentUpload/QuestionBank 自动显示/隐藏
+- ✅ Agent 对话隔离：切换 Agent 清空 history，对话中禁止切换
+- ✅ 每次 Start → 新上下文，Stop → AgentSelector 恢复可切换
+- ✅ 面板不覆盖视频（flex row 并排），不遮挡聊天框

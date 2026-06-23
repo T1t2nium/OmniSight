@@ -157,7 +157,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OmniSight",
-    version="0.7.0",
+    version="0.8.0",
     description="AI Visual Conversation Assistant Backend",
     lifespan=lifespan,
 )
@@ -184,7 +184,7 @@ async def health(request: Request):
     active_sessions = await state_manager.get_session_count()
     return {
         "status": "ok",
-        "version": "0.7.0",
+        "version": "0.8.0",
         "ai_provider": provider,
         "ai_available": ai_ok,
         "active_sessions": active_sessions,
