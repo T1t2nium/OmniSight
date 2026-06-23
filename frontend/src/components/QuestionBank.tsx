@@ -56,7 +56,6 @@ export function QuestionBank({ bank, visible }: QuestionBankProps) {
         <span className="question-bank__stats">{bank.total_questions} 题</span>
       </div>
 
-      <div className="question-bank__body">
       {bank.categories.map((cat: QuestionCategory) => {
         const isExpanded = expandedCategories.has(cat.type);
         return (
@@ -95,7 +94,6 @@ export function QuestionBank({ bank, visible }: QuestionBankProps) {
           </div>
         );
       })}
-      </div>
     </div>
   );
 }
