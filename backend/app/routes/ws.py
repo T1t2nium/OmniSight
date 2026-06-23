@@ -111,6 +111,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _handle_agent_select(websocket, session_id, payload)
                 elif msg_type == "document_upload":
                     await _handle_document_upload(websocket, session_id, payload)
+                elif msg_type == "reset_conversation":
+                    await _handle_reset_conversation(websocket, session_id)
                 else:
                     await _send_error(websocket, session_id,
                                       f"Unknown message type: {msg_type}")
@@ -257,15 +259,39 @@ async def _handle_agent_select(
 ) -> None:
     """Handle agent selection from the frontend.
 
-    Stores the selected agent_id in session state so the AI pipeline
-    can use the correct system prompt.
+    Stores the selected agent_id in session state and clears
+    the conversation history so agents don't share context.
     """
     agent_id = payload.get("agent_id", "chat")
     session = await state_manager.get(session_id)
     if session:
         session.selected_agent = agent_id
-        logger.info("Session %s selected agent: %s", session_id, agent_id)
+        session.history = []  # Clear history when switching agents
+        logger.info("Session %s selected agent: %s (history cleared)", session_id, agent_id)
     echo = EchoPayload(received_type="agent_select")
+    await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
+# ---- Conversation Reset ----
+
+
+async def _handle_reset_conversation(
+    ws: WebSocket, session_id: str
+) -> None:
+    """Reset conversation state — clear history and interview data.
+
+    Called by the frontend when the user clicks 'Start' to begin
+    a fresh conversation session.
+    """
+    session = await state_manager.get(session_id)
+    if session:
+        session.history = []
+        session.jd_entities = None
+        session.resume_entities = None
+        session.match_result = None
+        session.question_bank = None
+        logger.info("Session %s conversation reset (history cleared)", session_id)
+    echo = EchoPayload(received_type="reset_conversation")
     await _send_message(ws, session_id, "echo", echo.model_dump())
 
 

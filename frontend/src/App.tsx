@@ -264,9 +264,16 @@ function App() {
   }, [ws.onMessage]);
 
   const handleStartConversation = useCallback(async () => {
+    // Reset backend conversation history for a clean session
+    ws.send({
+      type: 'reset_conversation',
+      session_id: sessionIdRef.current,
+      timestamp: Date.now() / 1000,
+      payload: {},
+    });
     await media.startMedia();
     setConversationActive(true);
-  }, [media]);
+  }, [media, ws.send]);
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
@@ -349,6 +356,7 @@ function App() {
             agents={agent.agents}
             selectedAgentId={agent.selectedAgentId}
             onSelect={agent.selectAgent}
+            disabled={conversationActive}
           />
         </div>
       </header>

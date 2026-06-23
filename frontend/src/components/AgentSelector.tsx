@@ -5,19 +5,20 @@ interface AgentSelectorProps {
   agents: AgentInfo[];
   selectedAgentId: string;
   onSelect: (agentId: string) => void;
+  disabled?: boolean;
 }
 
 /**
  * Agent selector — glass-morphism dropdown.
  *
- * Compact dropdown that shows the current agent and expands
- * to reveal all available agents on click. Replaces the old
- * pill-button layout for a cleaner header.
+ * Disabled during active conversation to prevent mid-session
+ * agent switching and enforce clean history isolation.
  */
 export function AgentSelector({
   agents,
   selectedAgentId,
   onSelect,
+  disabled = false,
 }: AgentSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -43,7 +44,8 @@ export function AgentSelector({
     <div className="agent-selector" ref={ref}>
       <button
         className="agent-selector__trigger"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!disabled) setOpen((v) => !v); }}
+        disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
