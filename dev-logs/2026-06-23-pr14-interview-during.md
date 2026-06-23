@@ -1,4 +1,4 @@
-# PR 14 — InterviewAgent 面试中：全双工语音 + STAR 追问
+# PR 14 — InterviewAgent 面试中：增强指令 + STAR 追问
 
 **日期**：2026-06-23
 **状态**：✅ 已完成
@@ -8,31 +8,39 @@
 
 ## A. 目标
 
-实现 InterviewAgent 的"面试中"阶段：通过百炼实时 WebSocket API 驱动全双工语音对话，AI 基于题库逐轮提问，应用 STAR 法则深度追问，支持语义打断。
+实现 InterviewAgent 的"面试中"阶段：复用现有 AI 流水线（faster-whisper + BailianHTTP + Piper TTS），
+通过动态构建增强 system_prompt（注入题库 + JD + 简历 + 技能缺口 + STAR 追问规则），
+让 AI 按结构化面试流程精准提问。
 
 ---
 
-## B. 架构决策
+## B. 架构
 
-**两种流水线共存**：
-- **ChatAgent (保持不变)**：`faster-whisper → BailianHTTP → Piper TTS`
-- **InterviewAgent (新增)**：`BailianWSClient → Bailian Realtime WS (内部 ASR+LLM+TTS)`
+**最终方案**：不替换本地 TTS/STT，不引入百炼 Realtime WS。
 
-实时模式绕过本地 transcriber + TTS，直接利用百炼 Realtime 全双工能力。降级策略：API Key 为空时回退到原 HTTP 流水线。
+```
+InterviewAgent 面试中（与 ChatAgent 共用流水线）:
+audio_chunk → AudioBuffer → faster-whisper → BailianHTTP（增强 instruction）→ Piper TTS
+                                                      ↑
+                                          build_interview_instructions()
+                                          (题库+JD+简历+STAR规则)
+```
 
-**BailianWSClient 不实现 BaseAIClient**：两个协议接口完全不同 — 实时 API 是音频输入/输出，chat() 是文本输入 → 文本增量输出。
+- `interview_engine.py` 是纯 utility，负责构建 instruction 字符串
+- `ws.py` 在 interview_active 时将 instruction 注入 `_start_ai_pipeline` 的 `system_prompt`
+- `_save_history` 自动累积 `interview_transcript` 供 PR 15 评分使用
 
 ---
 
 ## C. 新建文件
 
-| 文件 | 说明 | 行数 |
-|------|------|------|
-| `backend/app/services/bailian_ws_client.py` | 百炼 Realtime WS 客户端 | ~280 |
-| `backend/app/services/interview_engine.py` | 面试进行中引擎 | ~280 |
-| `backend/tests/test_bailian_ws_client.py` | BailianWSClient 单元测试 (11 tests) | ~110 |
-| `backend/tests/test_interview_engine.py` | DuringInterviewEngine 单元测试 (25 tests) | ~370 |
-| `dev-logs/2026-06-23-pr14-interview-during.md` | 本文档 | — |
+| 文件 | 说明 |
+|------|------|
+| `backend/app/services/bailian_ws_client.py` | 百炼 Realtime WS 客户端（备用，当前流程未使用） |
+| `backend/app/services/interview_engine.py` | `build_interview_instructions()` — 指令构建器 |
+| `backend/tests/test_bailian_ws_client.py` | BailianWSClient 单元测试 (11 tests) |
+| `backend/tests/test_interview_engine.py` | 指令构建器测试 (22 tests) |
+| `dev-logs/2026-06-23-pr14-interview-during.md` | 本文档 |
 
 ---
 
@@ -40,16 +48,17 @@
 
 | 文件 | 变更详情 |
 |------|---------|
-| `backend/pyproject.toml` | + `websockets>=14,<15` |
+| `backend/pyproject.toml` | + `websockets>=14,<15`（BailianWSClient 依赖，备用） |
 | `backend/app/main.py` | version → 0.9.0 |
-| `backend/app/routes/ws.py` | +~200 行：interview handler、事件循环、audio/vad 路由、清理 |
-| `backend/app/models/schemas.py` | +2 Payload: InterviewStartedPayload, InterviewStoppedPayload |
-| `backend/app/models/state.py` | +3 字段: interview_active, interview_engine, interview_transcript |
+| `backend/app/routes/ws.py` | +~100 行：start/stop_interview handler；`_start_ai_pipeline` 注入 interview_instructions；`_save_history` 累积 transcript |
+| `backend/app/models/schemas.py` | +2 Payload：InterviewStartedPayload / InterviewStoppedPayload |
+| `backend/app/models/state.py` | +3 字段：interview_active / interview_instructions / interview_transcript |
 | `frontend/src/types/index.ts` | +2 TS 接口 |
-| `frontend/src/App.tsx` | ~50 行：面试 start/stop 集成 + 阶段指示器 |
-| `frontend/src/App.css` | ~30 行：面试 header 变体 + 阶段指示器样式 |
+| `frontend/src/App.tsx` | ~40 行：面试 start/stop 集成 + `🎙️ 面试中` 标签 |
+| `frontend/src/App.css` | ~30 行：面试 header 绿色变体 + 标签动画 |
 | `CLAUDE.md` | +2 关键路径 |
 | `dev-logs/INDEX.md` | +1 日志索引 |
+| `docs/implementation-steps.md` | +PR 14 任务清单 |
 
 ---
 
@@ -57,66 +66,45 @@
 
 ```
 [用户选择 InterviewAgent → 上传 JD+简历 → 题库生成]
-    ↓ 点击「开始面试」
-[Frontend] start_interview message → Backend
-    ↓ _handle_start_interview
-创建 BailianWSClient → 连接 Bailian Realtime WS
-创建 DuringInterviewEngine → build_instructions (题库+JD+简历)
-    ↓ session.update (instructions)
-[Backend → Frontend] interview_started (phase=icebreaker)
-    ↓ 面试进行中...
-[Frontend] audio_chunk → Backend relay → BailianWSClient → Bailian Realtime
-    ↓ server_vad + ASR + LLM + TTS
-[Bailian Realtime] events → Backend _interview_event_loop → Frontend
-    ↓
-[Frontend] 点击「停止面试」
-    ↓ stop_interview message
-[_handle_stop_interview] 取消事件循环 → 关闭 WS → 保存 transcript
-[Backend → Frontend] interview_stopped (含完整 transcript)
+    ↓ 点击「开始对话」
+[Frontend] start_interview → Backend
+    ↓ build_interview_instructions(bank, jd, resume, match)
+    ↓ 存入 session.interview_instructions
+[Backend → Frontend] interview_started → header 变绿 + "🎙️ 面试中" 标签
+    ↓ 正常 VAD + 语音流程...
+[User 说话] → audio_chunk → faster-whisper → BailianHTTP(system_prompt=instructions)
+    ↓ 流式返回 + Piper TTS → 前端播放
+[_save_history] → 自动同步 interview_transcript
+    ↓ 点击「停止」
+[Frontend] stop_interview → Backend
+[Backend → Frontend] interview_stopped（含 transcript 条目数）
 ```
 
 ---
 
-## F. 事件中继映射
-
-| 来自 Bailian Realtime | 发给前端 | 说明 |
-|---|---|---|
-| `response.audio_transcript.delta` | `llm_response` | AI 增量文本 |
-| `response.audio.delta` | `tts_audio` (24kHz) | AI 增量音频 |
-| `response.audio_transcript.done` | `llm_response` (done=true) | AI 完整文本 |
-| `conversation.item.input_audio_transcription.completed` | `transcript` | 用户语音识别 |
-| `input_audio_buffer.speech_started` | `ai_status` (listening) | 用户开始说话 |
-| `input_audio_buffer.speech_stopped` | `ai_status` (thinking) | 用户停止说话 |
-| `response.done` | `ai_status` (idle) | AI 回复完成 |
-| `error` | `error` | 异常 |
-
----
-
-## G. 验证结果
+## F. 验证结果
 
 | 验证项 | 结果 |
 |--------|------|
-| `uv run pytest tests/ -v` | ✅ 116/116 通过 (+36 new) |
+| `uv run pytest tests/ -v` | ✅ 112/112 通过（+32 new） |
 | `npx tsc --noEmit` | ✅ 零类型错误 |
 | 现有测试零回归 | ✅ |
-| 降级路径 | ✅ API Key 为空时 clear error |
+| 本地 TTS/STT 不受影响 | ✅ 全程复用现有流水线 |
+| 题库未就绪防护 | ✅ 前端 alert 提示等待 |
 
 ---
 
-## H. 注意事项
+## G. 过程中踩坑与修正
 
-- 百炼 Realtime WS 输出 24kHz 音频（输入 16kHz），前端 tts_audio handler 已适配多采样率
-- instructions 截断至 ~2KB（题库过大时保留前 15 题 + 摘要）
-- 百炼 Realtime WS 会话上限 120 分钟，面试场景足够
-- `websockets` 纯 Python 库，无 C 扩展，跨平台兼容
-- 降级模式：`BAILIAN_API_KEY` 为空时返回友好错误
+1. **websockets 14.x API 不兼容**：`extra_headers` → `additional_headers`，`websockets.asyncio.connect` → `websockets.connect`
+2. **百炼 Realtime API 模型/音色不支持**：`qwen3.5-omni-plus-2026-03-15` 不兼容 Realtime 端点，Cherry 音色不可用 → 最终放弃 Realtime WS，改用现有 HTTP 流水线
+3. **阶段指示器不可靠**：AI 内部推进阶段但无结构化信号 → 改为静态 `🎙️ 面试中` 标签
 
 ---
 
-## I. 下一步
+## H. 下一步
 
 **PR 15**: InterviewAgent 面试后 — 结构化雷达打分 + 报告生成
-- InterviewScorer (基于 transcript + JD 匹配度打分)
-- ReportGenerator (综合报告 + 录用建议)
-- RadarChart (前端 Canvas 雷达图)
-- ReportViewer (报告展示组件)
+- InterviewScorer（基于 transcript 评分）
+- ReportGenerator（综合报告）
+- RadarChart（前端 Canvas 雷达图）
