@@ -467,9 +467,13 @@ audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=ins
 - [x] 后端：`InterviewScorer` — AI 评分 + 报告生成器（JSON 解析 + 降级兜底）
 - [x] 后端：`ws.py` `_handle_stop_interview` 异步触发 `_generate_interview_report`
 - [x] 后端：`interview_report` WS 消息发送到前端
+- [x] 后端：`entity_extractor` 模糊技能匹配 + 60+ 别名映射 + 简历摘要提取 + 短技能词边界修复
+- [x] 后端：`question_generator` 题库 prompt 增加工作经历详情 + 候选人自我描述
 - [x] 前端：`RadarChart` — 纯 Canvas 五维雷达图（零依赖）
-- [x] 前端：`ReportViewer` — 报告卡片（雷达图 + 评分条 + 强弱项 + 录用建议）
-- [x] 前端：`App.tsx` 处理 `interview_report` 消息 + 渲染 ReportViewer
+- [x] 前端：`ReportViewer` — 折叠报告卡片 + 加载骨架屏
+- [x] 前端：`QuestionBank` 重构为下拉菜单（胶囊按钮 + popover）
+- [x] 前端：`ControlBar` Start 按钮 contextual hint（逐步引导上传文档）
+- [x] 前端：Vite 插件静默 WS proxy ECONNABORTED 错误
 - [x] 测试：17 新增测试（MockAIClient + JSON 解析 + fallback）
 
 ### 验证标准
@@ -477,5 +481,7 @@ audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=ins
 - ✅ 129/129 测试全绿（+17 new）
 - ✅ `npx tsc --noEmit` 零类型错误
 - ✅ AI 解析失败时降级至 fallback 报告
-- ✅ 前端评分条 + 雷达图动画渲染
+- ✅ ReportViewer 加载骨架 → 淡入真实报告
+- ✅ QuestionBank 下拉菜单不影响布局
+- ✅ 题库问题更贴合简历内容（工作经历入 prompt + 模糊匹配）
 
