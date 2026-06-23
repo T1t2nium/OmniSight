@@ -166,6 +166,11 @@
 | ChatLog | 空/有消息 | 居中提示 / 自动滚动消息列表 |
 | ChatBubble(User) | 转录完成 | 绿色渐变右对齐，hover 显示时间 |
 | ChatBubble(AI) | 流式/完成 | 暗色左对齐 + 呼吸光标 / 完成态光标消失 |
+| DocumentUpload | idle/uploading/parsed/error | 双区玻璃面板，虚线边框拖拽区，绿色勾/红色叉状态 |
+| QuestionBank | 关闭/展开菜单/分类折叠 | 胶囊触发器 → 弹窗菜单，分类手风琴折叠，难度彩色标签 |
+| RadarChart | Canvas 5 边形 | 五层同心网格，半透明填充，数据点圆点，维度标签 |
+| ReportViewer | 加载中/折叠/展开 | 骨架屏（旋转等待 + 脉冲条）→ 折叠卡片 → 展开雷达图 + 评分条 |
+| AgentSelector | 展开/收起/disabled | 下拉菜单弹窗，Agent 名称 + 描述，选中高亮，对话中禁用 |
 
 ### 交互元素
 
@@ -196,17 +201,33 @@
 ```
 frontend/src/
 ├── styles/
-│   └── tokens.css          # 设计 token 定义（所有 CSS 变量）
-├── App.css                 # 全局样式（引用 tokens.css 变量）
-├── App.tsx                 # 根组件
-├── main.tsx                # 入口（导入 tokens.css → App.css）
+│   └── tokens.css              # 设计 token 定义（所有 CSS 变量）
+├── App.css                     # 全局样式（引用 tokens.css 变量）
+├── App.tsx                     # 根组件
+├── main.tsx                    # 入口（导入 tokens.css → App.css）
+├── types/
+│   └── index.ts                # TypeScript 共享类型定义
+├── hooks/
+│   ├── useWebSocket.ts         # WS 连接 + 消息收发
+│   ├── useMediaStream.ts       # 摄像头/麦克风采集
+│   ├── useVAD.ts               # 浏览器端 VAD
+│   ├── useAudioPlayer.ts       # PCM16 播放
+│   ├── useFrameCapture.ts      # 视频帧捕获
+│   └── useAgent.ts             # Agent 列表 + 选中状态
 └── components/
-    ├── VideoPanel.tsx       # 视频面板
-    ├── AudioIndicator.tsx   # 语音活动指示器
-    ├── ConnectionStatus.tsx # WebSocket 连接状态
-    ├── ControlBar.tsx       # 控制按钮栏
-    ├── ChatLog.tsx          # 对话日志
-    └── ErrorBoundary.tsx    # 全局错误边界
+    ├── AgentSelector.tsx       # Agent 选择器（下拉菜单）
+    ├── VideoPanel.tsx          # 视频面板
+    ├── AudioIndicator.tsx      # 语音活动指示器
+    ├── ConnectionStatus.tsx    # WebSocket 连接状态
+    ├── ControlBar.tsx          # 控制按钮栏
+    ├── ChatLog.tsx             # 对话日志
+    ├── GlassButton.tsx         # 玻璃态按钮
+    ├── NeuralBackground.tsx    # Canvas 流场粒子背景
+    ├── DocumentUpload.tsx      # 双区拖拽文档上传
+    ├── QuestionBank.tsx        # 下拉分类题库
+    ├── RadarChart.tsx          # Canvas 五维雷达图
+    ├── ReportViewer.tsx        # 折叠面试报告卡片
+    └── ErrorBoundary.tsx       # 全局错误边界
 ```
 
 ---
