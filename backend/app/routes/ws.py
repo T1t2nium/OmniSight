@@ -408,9 +408,16 @@ async def _handle_start_interview(
         match_result = MatchResult(**(session.match_result or {}))
 
         # Create Bailian client and engine
+        # Derive realtime model from HTTP model:
+        #   qwen3.5-omni-plus-2026-03-15 → qwen3.5-omni-plus-realtime
+        import re
+        realtime_model = re.sub(
+            r'-\d{4}-\d{2}-\d{2}$', '-realtime',
+            settings.bailian_model,
+        )
         ws_client = BailianWSClient(
             settings.bailian_api_key,
-            settings.bailian_model,
+            realtime_model,
         )
         engine = DuringInterviewEngine(
             ws_client=ws_client,

@@ -290,6 +290,10 @@ function App() {
   const handleStartConversation = useCallback(async () => {
     // PR 14: Interview mode — start real-time interview via Bailian Realtime
     if (agent.selectedAgentId === 'interview') {
+      if (!questionBank || questionBank.categories.length === 0) {
+        alert('题库尚未就绪，请等待 AI 生成题库后再开始面试。');
+        return;
+      }
       ws.send({
         type: 'start_interview',
         session_id: sessionIdRef.current,
@@ -309,7 +313,7 @@ function App() {
     });
     await media.startMedia();
     setConversationActive(true);
-  }, [media, ws.send, agent.selectedAgentId]);
+  }, [media, ws.send, agent.selectedAgentId, questionBank]);
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();

@@ -17,8 +17,12 @@ from types import TracebackType
 from typing import Any, AsyncIterator, Self
 
 import websockets
-import websockets.asyncio
-import websockets.exceptions
+from websockets import ClientConnection
+from websockets.exceptions import (
+    ConnectionClosed,
+    ConnectionClosedOK,
+    ConnectionClosedError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,7 @@ class BailianWSClient:
             raise ValueError("Bailian API key must not be empty")
         self._api_key = api_key
         self._model = model
-        self._ws: websockets.asyncio.ClientConnection | None = None
+        self._ws: ClientConnection | None = None
         self._connected = False
         self._receive_queue: asyncio.Queue[dict] = asyncio.Queue()
         self._receiver_task: asyncio.Task | None = None
@@ -99,7 +103,7 @@ class BailianWSClient:
 
         # Connect with auth header. The websockets library 14.x uses
         # additional_headers via the `extra_headers` kwarg.
-        self._ws = await websockets.asyncio.connect(
+        self._ws = await websockets.connect(
             url,
             extra_headers={"Authorization": f"Bearer {self._api_key}"},
             ping_interval=30,
@@ -244,7 +248,7 @@ class BailianWSClient:
         if self._ws is not None:
             try:
                 await self._ws.close()
-            except (websockets.exceptions.ConnectionClosed, Exception):
+            except (ConnectionClosed, Exception):
                 pass
             self._ws = None
 
@@ -259,7 +263,7 @@ class BailianWSClient:
         raw = json.dumps(event, ensure_ascii=False)
         try:
             await self._ws.send(raw)
-        except websockets.exceptions.ConnectionClosed as exc:
+        except ConnectionClosed as exc:
             logger.warning("Failed to send event %s: %s", event.get("type"), exc)
             self._connected = False
 
@@ -268,11 +272,11 @@ class BailianWSClient:
         while self._connected and self._ws is not None:
             try:
                 raw = await self._ws.recv()
-            except websockets.exceptions.ConnectionClosedOK:
+            except ConnectionClosedOK:
                 logger.debug("Bailian Realtime WS closed normally")
                 self._connected = False
                 break
-            except websockets.exceptions.ConnectionClosedError as exc:
+            except ConnectionClosedError as exc:
                 logger.warning("Bailian Realtime WS closed with error: %s", exc)
                 self._connected = False
                 break
