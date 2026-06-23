@@ -22,6 +22,7 @@ import type {
   InterruptPayload,
   DocumentParsedPayload,
   QuestionBankPayload,
+  InterviewStoppedPayload,
 } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
@@ -79,6 +80,9 @@ function App() {
     status: 'idle', filename: '', error: '',
   });
   const [questionBank, setQuestionBank] = useState<QuestionBankPayload | null>(null);
+
+  // PR 14: Interview mode state
+  const [interviewActive, setInterviewActive] = useState(false);
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -249,6 +253,21 @@ function App() {
         return;
       }
 
+      // ---- PR 14: Interview started ----
+      if (msg.type === 'interview_started') {
+        setInterviewActive(true);
+        setConversationActive(true);
+        return;
+      }
+
+      // ---- PR 14: Interview stopped ----
+      if (msg.type === 'interview_stopped') {
+        const p = msg.payload as unknown as InterviewStoppedPayload;
+        setInterviewActive(false);
+        console.log('[App] Interview stopped:', p.message, p.transcript?.length, 'turns');
+        return;
+      }
+
       // Deduplicate ai_status — replace previous instead of appending
       if (msg.type === 'ai_status') {
         setChatMessages((prev) => {
@@ -264,7 +283,23 @@ function App() {
   }, [ws.onMessage]);
 
   const handleStartConversation = useCallback(async () => {
-    // Reset backend conversation history for a clean session
+    // PR 14: Interview mode — start real-time interview via Bailian Realtime
+    if (agent.selectedAgentId === 'interview') {
+      if (!questionBank || questionBank.categories.length === 0) {
+        alert('题库尚未就绪，请等待 AI 生成题库后再开始面试。');
+        return;
+      }
+      ws.send({
+        type: 'start_interview',
+        session_id: sessionIdRef.current,
+        timestamp: Date.now() / 1000,
+        payload: {},
+      });
+      await media.startMedia();
+      // interview_started response will set interviewActive + conversationActive
+      return;
+    }
+    // Chat mode: reset backend conversation history for a clean session
     ws.send({
       type: 'reset_conversation',
       session_id: sessionIdRef.current,
@@ -273,11 +308,21 @@ function App() {
     });
     await media.startMedia();
     setConversationActive(true);
-  }, [media, ws.send]);
+  }, [media, ws.send, agent.selectedAgentId, questionBank]);
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
     stopPlaybackRef.current();
+    // PR 14: Stop interview if active
+    if (interviewActive) {
+      ws.send({
+        type: 'stop_interview',
+        session_id: sessionIdRef.current,
+        timestamp: Date.now() / 1000,
+        payload: {},
+      });
+      setInterviewActive(false);
+    }
     setConversationActive(false);
     setChatMessages([]);
     setTotalFrames(0);
@@ -288,7 +333,7 @@ function App() {
     setJdZone({ status: 'idle', filename: '', error: '' });
     setResumeZone({ status: 'idle', filename: '', error: '' });
     setQuestionBank(null);
-  }, [media]);
+  }, [media, ws.send, interviewActive]);
 
   // PR 13: Handle document upload start
   const handleUploadStart = useCallback((docType: 'jd' | 'resume', filename: string) => {
@@ -347,16 +392,19 @@ function App() {
         speed={0.8}
       />
       <div className="app">
-        <header className="app-header">
+        <header className={`app-header${interviewActive ? ' app-header--interview' : ''}`}>
         <div className="app-logo" aria-hidden="true">◈</div>
         <h1>OmniSight</h1>
         <span className="app-subtitle">AI Vision</span>
+        {interviewActive && (
+          <span className="interview-phase">🎙️ 面试中</span>
+        )}
         <div className="app-header__agent">
           <AgentSelector
             agents={agent.agents}
             selectedAgentId={agent.selectedAgentId}
             onSelect={agent.selectAgent}
-            disabled={conversationActive}
+            disabled={conversationActive || interviewActive}
           />
         </div>
       </header>

@@ -21,6 +21,7 @@
 | 2026-06-23 | **PR 11 — Agent 框架 + Agent 选择器 UI ✅** | [2026-06-23-pr11-agent-framework.md](2026-06-23-pr11-agent-framework.md) |
 | 2026-06-23 | **PR 12 — 文档解析 + 实体提取服务 ✅** | [2026-06-23-pr12-document-parser.md](2026-06-23-pr12-document-parser.md) |
 | 2026-06-23 | **PR 13 — InterviewAgent 面试前 + 文档上传 + 题库生成 ✅** | [2026-06-23-pr13-interview-agent-pre.md](2026-06-23-pr13-interview-agent-pre.md) |
+| 2026-06-23 | **PR 14 — InterviewAgent 面试中 — 增强指令 + STAR 追问 ✅** | [2026-06-23-pr14-interview-during.md](2026-06-23-pr14-interview-during.md) |
 
 ---
 

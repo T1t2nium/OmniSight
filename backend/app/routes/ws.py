@@ -8,6 +8,11 @@ PR 3 additions:
 - vad_event(speech_end) launches AI pipeline as a background task.
 - New server→client message types: transcript, llm_response, ai_status.
 - Background tasks are tracked per-session and cancelled on disconnect.
+
+PR 14 additions:
+- start_interview / stop_interview handlers for InterviewAgent.
+- interview_active sessions use enhanced instructions (question bank + JD + resume)
+  injected as system_prompt into the existing pipeline — local TTS/STT unchanged.
 """
 
 import asyncio
@@ -27,15 +32,18 @@ from app.models.schemas import (
     AgentListPayload,
     AgentInfo,
     DocumentParsedPayload,
+    InterviewStartedPayload,
+    InterviewStoppedPayload,
 )
 from app.models.state import ConnectionStateManager
-from app.models.interview import JDEntities, ResumeEntities, MatchResult
+from app.models.interview import JDEntities, ResumeEntities, MatchResult, QuestionBank
 from app.services.audio import AudioBufferManager
 from app.services.conversation import ConversationOrchestrator
 from app.services.frame_manager import FrameMotionDetector
 from app.services.document_parser import DocumentParser
 from app.services.entity_extractor import EntityExtractor
 from app.services.question_generator import QuestionGenerator
+from app.services.interview_engine import build_interview_instructions
 from app.agents.base import AgentRegistry
 from app.config import get_settings
 
@@ -113,6 +121,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _handle_document_upload(websocket, session_id, payload)
                 elif msg_type == "reset_conversation":
                     await _handle_reset_conversation(websocket, session_id)
+                elif msg_type == "start_interview":
+                    await _handle_start_interview(websocket, session_id, payload)
+                elif msg_type == "stop_interview":
+                    await _handle_stop_interview(websocket, session_id)
                 else:
                     await _send_error(websocket, session_id,
                                       f"Unknown message type: {msg_type}")
@@ -145,6 +157,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if task and not task.done():
                 task.cancel()
                 logger.info("Cancelled AI pipeline for %s", session_id)
+
             await state_manager.remove(session_id)
             audio_manager.clear(session_id)
             logger.info("Session cleaned up: %s", session_id)
@@ -290,9 +303,103 @@ async def _handle_reset_conversation(
         session.resume_entities = None
         session.match_result = None
         session.question_bank = None
+        session.interview_active = False
+        session.interview_instructions = ""
+        session.interview_transcript = []
         logger.info("Session %s conversation reset (history cleared)", session_id)
     echo = EchoPayload(received_type="reset_conversation")
     await _send_message(ws, session_id, "echo", echo.model_dump())
+
+
+# ---- Interview During (PR 14) ----
+
+
+async def _handle_start_interview(
+    ws: WebSocket, session_id: str, payload: dict
+) -> None:
+    """Start an interview session using the existing AI pipeline.
+
+    Builds enhanced system instructions from question bank + JD + resume,
+    stores them in the session. The normal pipeline (faster-whisper →
+    BailianHTTP → Piper TTS) uses these instructions automatically.
+    Sends interview_started to frontend on success.
+    """
+    session = await state_manager.get(session_id)
+    if not session:
+        await _send_error(ws, session_id, "Session not found")
+        return
+
+    if session.interview_active:
+        await _send_error(ws, session_id, "Interview already in progress")
+        return
+
+    # Validate required interview data
+    if not session.question_bank:
+        await _send_error(ws, session_id,
+                          "No question bank — upload JD and resume first")
+        return
+
+    try:
+        # Reconstruct models from session dicts
+        bank = QuestionBank(**session.question_bank)
+        jd_entities = JDEntities(**(session.jd_entities or {}))
+        resume_entities = ResumeEntities(**(session.resume_entities or {}))
+        match_result = MatchResult(**(session.match_result or {}))
+
+        # Build interview instructions for the AI pipeline
+        instructions = build_interview_instructions(
+            question_bank=bank,
+            jd_entities=jd_entities,
+            resume_entities=resume_entities,
+            match_result=match_result,
+        )
+
+        # Store in session — _start_ai_pipeline picks it up automatically
+        session.interview_instructions = instructions
+        session.interview_active = True
+        session.interview_transcript = []
+        # Clear history so the interview starts fresh with the new instructions
+        session.history = []
+
+        # Notify frontend
+        started = InterviewStartedPayload()
+        await _send_message(ws, session_id, "interview_started", started.model_dump())
+
+        logger.info("Interview started for session %s — %d chars of instructions",
+                    session_id, len(instructions))
+
+    except Exception:
+        logger.exception("Failed to start interview for %s", session_id)
+        session.interview_active = False
+        session.interview_instructions = ""
+        await _send_error(ws, session_id, "Failed to start interview")
+
+
+async def _handle_stop_interview(
+    ws: WebSocket, session_id: str
+) -> None:
+    """Stop the interview, save transcript, and clean up.
+
+    Notifies the frontend with the accumulated transcript.
+    """
+    session = await state_manager.get(session_id)
+    if not session or not session.interview_active:
+        return
+
+    logger.info("Stopping interview for session %s", session_id)
+
+    transcript = session.interview_transcript or []
+    session.interview_active = False
+    session.interview_instructions = ""
+
+    # Notify frontend
+    stopped = InterviewStoppedPayload(
+        transcript=transcript,
+        message=f"Interview complete — {len(transcript)} turns recorded",
+    )
+    await _send_message(ws, session_id, "interview_stopped", stopped.model_dump())
+    logger.info("Interview stopped for session %s — %d transcript entries",
+                session_id, len(transcript))
 
 
 # ---- Document Upload & Interview Pipeline ----
@@ -441,10 +548,17 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
     logger.debug("Loaded history for %s: %d messages", session_id, len(history))
 
     # PR 11: look up agent system_prompt for this session
-    agent_id = session.selected_agent if session else "chat"
-    agent = AgentRegistry.get(agent_id)
-    system_prompt = agent.system_prompt if agent else None
-    logger.debug("Session %s agent=%s, has_system_prompt=%s", session_id, agent_id, bool(system_prompt))
+    # PR 14: interview mode uses enhanced instructions instead
+    if session and session.interview_active and session.interview_instructions:
+        system_prompt = session.interview_instructions
+        logger.debug("Session %s using interview instructions (%d chars)",
+                     session_id, len(system_prompt))
+    else:
+        agent_id = session.selected_agent if session else "chat"
+        agent = AgentRegistry.get(agent_id)
+        system_prompt = agent.system_prompt if agent else None
+        logger.debug("Session %s agent=%s, has_system_prompt=%s",
+                     session_id, agent_id, bool(system_prompt))
 
     task = asyncio.create_task(
         orchestrator.process_utterance(
@@ -487,6 +601,9 @@ async def _save_history(session_id: str, history: list[dict]) -> None:
         s = await state_manager.get(session_id)
         if s:
             s.history = history
+            # PR 14: Accumulate interview transcript for post-scoring
+            if s.interview_active:
+                s.interview_transcript = history.copy()
             logger.debug("Saved history for %s: %d messages", session_id, len(history))
     except Exception as exc:
         logger.debug("Failed to save history for %s: %s", session_id, exc)

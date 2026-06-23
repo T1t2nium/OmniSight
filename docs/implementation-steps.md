@@ -21,7 +21,7 @@
 | 11 | `phase/11-agent-framework` | Agent 框架 + Agent 选择器 UI ✅ | PR 10 |
 | 12 | `phase/12-document-parser` | 文档解析 + 实体提取服务 ✅ | PR 11 |
 | 13 | `phase/13-interview-agent-pre` | InterviewAgent 面试前 + 题库生成 ✅ | PR 12 |
-| 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR | PR 13 |
+| 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR ✅ | PR 13 |
 | 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 评分 + 报告 | PR 14 |
 | 16 | `phase/16-integration` | 端到端集成测试 + 文档完善 | PR 15 |
 
@@ -422,3 +422,37 @@
 - ✅ Agent 对话隔离：切换 Agent 清空 history，对话中禁止切换
 - ✅ 每次 Start → 新上下文，Stop → AgentSelector 恢复可切换
 - ✅ 面板不覆盖视频（flex row 并排），不遮挡聊天框
+
+---
+
+## PR 14: InterviewAgent 面试中 — 增强指令 + STAR 追问
+
+### 任务清单
+
+- [x] 后端：`interview_engine.py` — `build_interview_instructions()` 指令构建器（题库+JD+简历+STAR规则）
+- [x] 后端：`bailian_ws_client.py` — 百炼 Realtime WS 客户端（备用，当前未使用）
+- [x] 后端：`ws.py` start/stop_interview handler + `_start_ai_pipeline` 注入 interview_instructions
+- [x] 后端：`schemas.py` +2 Payload（InterviewStartedPayload / InterviewStoppedPayload）
+- [x] 后端：`SessionState` +3 字段（interview_active / interview_instructions / interview_transcript）
+- [x] 后端：`_save_history` 自动累积 interview_transcript（供 PR 15 评分）
+- [x] 后端：`pyproject.toml` 添加 `websockets>=14,<15` 依赖
+- [x] 后端：`main.py` version → 0.9.0
+- [x] 前端：types 扩展 + App.tsx 面试 start/stop 集成 + `🎙️ 面试中` 标签
+- [x] 前端：App.css 面试 header 绿色变体 + 标签动画
+- [x] 前端：题库未就绪时拦截 start_interview（alert 提示等待）
+- [x] 测试：33 新增测试（BailianWSClient 11 + 指令构建器 22）
+
+### 架构决策
+
+**复用现有流水线**（不替换本地 TTS/STT）：
+```
+audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=instructions) → Piper TTS
+```
+百炼 Realtime WS 方案因模型/音色不兼容放弃（BailianWSClient 保留备用）。
+
+### 验证标准
+
+- ✅ 112/112 测试全绿（+32 new）
+- ✅ `npx tsc --noEmit` 零类型错误
+- ✅ 本地 TTS/STT 流水线不受影响
+- ✅ 题库未就绪时前端拦截

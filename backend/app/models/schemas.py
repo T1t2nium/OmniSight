@@ -159,3 +159,18 @@ class QuestionBankPayload(BaseModel):
     categories: list[dict]
     total_questions: int
     generated_at: str = ""
+
+
+# ---- PR 14: Interview During ----
+
+class InterviewStartedPayload(BaseModel):
+    """Sent by server when real-time interview has started."""
+
+    phase: str = "icebreaker"
+
+
+class InterviewStoppedPayload(BaseModel):
+    """Sent by server when interview has ended, with full transcript."""
+
+    transcript: list[dict] = Field(default_factory=list)
+    message: str = ""

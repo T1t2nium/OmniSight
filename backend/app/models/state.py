@@ -37,6 +37,10 @@ class SessionState:
     question_bank: dict | None = None
     jd_filename: str = ""
     resume_filename: str = ""
+    # PR 14: interview during state
+    interview_active: bool = False
+    interview_instructions: str = ""  # Built from question bank + JD + resume
+    interview_transcript: list[dict] = field(default_factory=list)
 
 
 class ConnectionStateManager:
