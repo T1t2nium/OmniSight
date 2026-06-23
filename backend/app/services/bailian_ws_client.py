@@ -105,7 +105,7 @@ class BailianWSClient:
         # additional_headers via the `extra_headers` kwarg.
         self._ws = await websockets.connect(
             url,
-            extra_headers={"Authorization": f"Bearer {self._api_key}"},
+            additional_headers={"Authorization": f"Bearer {self._api_key}"},
             ping_interval=30,
             ping_timeout=10,
             close_timeout=5,
