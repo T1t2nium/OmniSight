@@ -13,13 +13,24 @@ html, body, #root {
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Ambient light inherits from this */
   position: relative;
   overflow: hidden;
 }
 
-body {
-  overflow: hidden;
+/* ---- Global scrollbar styling ---- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* ===== App Shell ===== */
@@ -130,6 +141,9 @@ body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
 
 /* ===== Layout Sections ===== */
@@ -169,7 +183,7 @@ body {
 
 .layout-chat {
   flex: 1;
-  min-height: 0;
+  min-height: 120px;
   overflow: hidden;
 }
 
