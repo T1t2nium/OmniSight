@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { RadarChart } from './RadarChart';
 import type { RadarScore } from './RadarChart';
 import type { InterviewReportPayload } from '../types';
@@ -25,6 +26,8 @@ const SCORE_LABELS: Record<string, string> = {
 };
 
 export function ReportViewer({ report, visible }: ReportViewerProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!visible || !report) return null;
 
   const scores = report.scores;
@@ -35,7 +38,6 @@ export function ReportViewer({ report, visible }: ReportViewerProps) {
 
   const recStyle = RECOMMENDATION_STYLE[report.recommendation] || RECOMMENDATION_STYLE['保留意见'];
 
-  // Individual score bars
   const scoreBars = Object.entries(scores).map(([key, val]) => ({
     key,
     label: SCORE_LABELS[key] || key,
@@ -43,66 +45,72 @@ export function ReportViewer({ report, visible }: ReportViewerProps) {
   }));
 
   return (
-    <div className="report-viewer">
-      <div className="report-viewer__header">
-        <span className="report-viewer__title">📊 面试评估报告</span>
-        <span
-          className="report-viewer__badge"
-          style={{ background: recStyle.bg, color: recStyle.text }}
-        >
-          {report.recommendation}
+    <div className={`report-viewer${expanded ? ' report-viewer--expanded' : ''}`}>
+      {/* Always-visible compact header */}
+      <button
+        className="report-viewer__header"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="report-viewer__title">
+          📊 面试评估报告 · {report.overall_score.toFixed(0)} 分
         </span>
-      </div>
+        <span className="report-viewer__header-right">
+          <span
+            className="report-viewer__badge"
+            style={{ background: recStyle.bg, color: recStyle.text }}
+          >
+            {report.recommendation}
+          </span>
+          <span className={`report-viewer__chevron${expanded ? ' report-viewer__chevron--open' : ''}`}>
+            ▼
+          </span>
+        </span>
+      </button>
 
-      <div className="report-viewer__body">
-        {/* Left: radar chart */}
-        <div className="report-viewer__radar">
-          <RadarChart scores={radarScores} color="#10b981" />
-          <div className="report-viewer__overall">
-            <span className="report-viewer__overall-score">
-              {report.overall_score.toFixed(0)}
-            </span>
-            <span className="report-viewer__overall-label">综合评分</span>
+      {/* Collapsible detail section */}
+      {expanded && (
+        <div className="report-viewer__body">
+          <div className="report-viewer__radar">
+            <RadarChart scores={radarScores} size={200} color="#10b981" />
+          </div>
+
+          <div className="report-viewer__details">
+            {scoreBars.map((bar) => (
+              <div key={bar.key} className="report-viewer__score-item">
+                <span className="report-viewer__score-label">{bar.label}</span>
+                <div className="report-viewer__score-bar-track">
+                  <div
+                    className="report-viewer__score-bar-fill"
+                    style={{ width: `${Math.min(bar.value, 100)}%` }}
+                  />
+                </div>
+                <span className="report-viewer__score-value">{bar.value.toFixed(0)}</span>
+              </div>
+            ))}
+            <p className="report-viewer__summary">{report.summary}</p>
+
+            <div className="report-viewer__lists">
+              <div className="report-viewer__list report-viewer__list--strength">
+                <h4 className="report-viewer__list-title">✅ 优势</h4>
+                <ul>
+                  {report.strengths.map((s, i) => (
+                    <li key={`s-${i}`}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="report-viewer__list report-viewer__list--weakness">
+                <h4 className="report-viewer__list-title">⚠️ 待改进</h4>
+                <ul>
+                  {report.weaknesses.map((w, i) => (
+                    <li key={`w-${i}`}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Right: score bars + summary */}
-        <div className="report-viewer__details">
-          {scoreBars.map((bar) => (
-            <div key={bar.key} className="report-viewer__score-item">
-              <span className="report-viewer__score-label">{bar.label}</span>
-              <div className="report-viewer__score-bar-track">
-                <div
-                  className="report-viewer__score-bar-fill"
-                  style={{ width: `${Math.min(bar.value, 100)}%` }}
-                />
-              </div>
-              <span className="report-viewer__score-value">{bar.value.toFixed(0)}</span>
-            </div>
-          ))}
-          <p className="report-viewer__summary">{report.summary}</p>
-        </div>
-      </div>
-
-      {/* Bottom: strengths + weaknesses */}
-      <div className="report-viewer__lists">
-        <div className="report-viewer__list report-viewer__list--strength">
-          <h4 className="report-viewer__list-title">✅ 优势</h4>
-          <ul>
-            {report.strengths.map((s, i) => (
-              <li key={`s-${i}`}>{s}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="report-viewer__list report-viewer__list--weakness">
-          <h4 className="report-viewer__list-title">⚠️ 待改进</h4>
-          <ul>
-            {report.weaknesses.map((w, i) => (
-              <li key={`w-${i}`}>{w}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
