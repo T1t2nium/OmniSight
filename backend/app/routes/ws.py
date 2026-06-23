@@ -34,6 +34,7 @@ from app.models.schemas import (
     DocumentParsedPayload,
     InterviewStartedPayload,
     InterviewStoppedPayload,
+    InterviewReportPayload,
 )
 from app.models.state import ConnectionStateManager
 from app.models.interview import JDEntities, ResumeEntities, MatchResult, QuestionBank
@@ -44,6 +45,7 @@ from app.services.document_parser import DocumentParser
 from app.services.entity_extractor import EntityExtractor
 from app.services.question_generator import QuestionGenerator
 from app.services.interview_engine import build_interview_instructions
+from app.services.interview_scorer import InterviewScorer
 from app.agents.base import AgentRegistry
 from app.config import get_settings
 
@@ -400,6 +402,51 @@ async def _handle_stop_interview(
     await _send_message(ws, session_id, "interview_stopped", stopped.model_dump())
     logger.info("Interview stopped for session %s — %d transcript entries",
                 session_id, len(transcript))
+
+    # PR 15: Trigger AI report generation asynchronously
+    if transcript and session.jd_entities:
+        asyncio.create_task(
+            _generate_interview_report(ws, session_id, transcript)
+        )
+
+
+async def _generate_interview_report(
+    ws: WebSocket, session_id: str, transcript: list[dict]
+) -> None:
+    """Generate post-interview scoring report using AI.
+
+    Runs asynchronously after the interview stops. Fetches JD,
+    resume, and match data from the session, calls InterviewScorer,
+    stores the report, and sends it to the frontend.
+    """
+    session = await state_manager.get(session_id)
+    if not session:
+        return
+
+    try:
+        orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
+        ai_client = orchestrator._ai_client
+
+        jd = JDEntities(**(session.jd_entities or {}))
+        resume = ResumeEntities(**(session.resume_entities or {}))
+        match = MatchResult(**(session.match_result or {}))
+
+        report = await InterviewScorer.generate_report(
+            ai_client, transcript, jd, resume, match,
+        )
+        session.interview_report = report.model_dump()
+
+        await _send_message(
+            ws, session_id, "interview_report", report.model_dump(),
+        )
+        logger.info(
+            "Interview report sent for %s: overall=%.1f, recommendation=%s",
+            session_id, report.overall_score, report.recommendation,
+        )
+    except Exception:
+        logger.exception(
+            "Interview report generation failed for %s", session_id,
+        )
 
 
 # ---- Document Upload & Interview Pipeline ----

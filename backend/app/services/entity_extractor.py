@@ -130,6 +130,7 @@ class EntityExtractor:
         work_experiences = EntityExtractor._extract_work_experiences(text)
         education = EntityExtractor._extract_education(text)
         total_years = sum(exp.years for exp in work_experiences)
+        summary = EntityExtractor._extract_resume_summary(text)
 
         return ResumeEntities(
             name=name,
@@ -139,34 +140,38 @@ class EntityExtractor:
             work_experiences=work_experiences,
             education=education,
             total_years=round(total_years, 1),
+            summary=summary,
         )
 
     @staticmethod
     def match(jd: JDEntities, resume: ResumeEntities) -> MatchResult:
         """Compare JD requirements with candidate profile and compute match."""
-        jd_skills_lower = {s.lower() for s in jd.required_skills}
-        pref_skills_lower = {s.lower() for s in jd.preferred_skills}
-        resume_skills_lower = {s.lower() for s in resume.skills}
+        # Normalize all skills through alias mapping for accurate comparison
+        jd_skills_norm = {_normalize_skill(s) for s in jd.required_skills}
+        pref_skills_norm = {_normalize_skill(s) for s in jd.preferred_skills}
+        resume_skills_norm = {_normalize_skill(s) for s in resume.skills}
 
-        # Skill matching
-        matched = sorted(jd_skills_lower & resume_skills_lower)
-        missing = sorted(jd_skills_lower - resume_skills_lower)
-        extra = sorted(resume_skills_lower - jd_skills_lower - pref_skills_lower)
+        # Skill matching with normalized comparison
+        matched = sorted(jd_skills_norm & resume_skills_norm)
+        missing = sorted(jd_skills_norm - resume_skills_norm)
+        extra = sorted(resume_skills_norm - jd_skills_norm - pref_skills_norm)
 
         # Skill gaps (detailed)
         skill_gaps: list[SkillGap] = []
         for skill in jd.required_skills:
+            norm = _normalize_skill(skill)
             skill_gaps.append(SkillGap(
                 skill=skill,
                 required=True,
-                candidate_has=skill.lower() in resume_skills_lower,
+                candidate_has=norm in resume_skills_norm,
                 importance="high",
             ))
         for skill in jd.preferred_skills:
+            norm = _normalize_skill(skill)
             skill_gaps.append(SkillGap(
                 skill=skill,
                 required=False,
-                candidate_has=skill.lower() in resume_skills_lower,
+                candidate_has=norm in resume_skills_norm,
                 importance="medium",
             ))
 
@@ -176,7 +181,7 @@ class EntityExtractor:
             match_pct = 100.0
         else:
             matched_required = len(matched)
-            matched_preferred = len(pref_skills_lower & resume_skills_lower)
+            matched_preferred = len(pref_skills_norm & resume_skills_norm)
             match_pct = round(
                 (matched_required * 1.5 + matched_preferred * 0.5)
                 / (len(jd.required_skills) * 1.5 + len(jd.preferred_skills) * 0.5)
@@ -248,8 +253,9 @@ class EntityExtractor:
 
         found_skills: set[str] = set()
         for skill in _SKILL_KEYWORDS:
-            if skill.lower() in req_section.lower():
-                found_skills.add(skill)
+            if _fuzzy_match_skill(req_section, skill):
+                normalized = _normalize_skill(skill)
+                found_skills.add(normalized)
 
         # Split into required vs preferred based on surrounding keywords
         required: list[str] = []
@@ -446,12 +452,13 @@ class EntityExtractor:
 
     @staticmethod
     def _extract_resume_skills(text: str) -> list[str]:
-        """Extract skills from resume using keyword matching."""
-        text_lower = text.lower()
+        """Extract skills from resume using fuzzy keyword matching."""
         found: set[str] = set()
         for skill in _SKILL_KEYWORDS:
-            if skill.lower() in text_lower:
-                found.add(skill)
+            if _fuzzy_match_skill(text, skill):
+                # Normalize through alias to avoid duplicates
+                normalized = _normalize_skill(skill)
+                found.add(normalized)
         return sorted(found)
 
     @staticmethod
@@ -653,8 +660,180 @@ class EntityExtractor:
 
         return education
 
+    @staticmethod
+    def _extract_resume_summary(text: str) -> str:
+        """Extract candidate self-assessment / summary section from resume."""
+        # Common section headers for self-assessment in Chinese & English resumes
+        summary_markers = [
+            "自我评价", "个人总结", "个人简介", "自我介绍", "求职意向",
+            "自我描述", "关于我", "个人评价", "专业总结",
+            "summary", "profile", "objective", "about me",
+            "professional summary", "career objective",
+        ]
 
-# ---- Utility ----
+        lines = text.split("\n")
+        summary_start = -1
+
+        for i, line in enumerate(lines):
+            line_lower = line.strip().lower()
+            for marker in summary_markers:
+                if marker in line_lower:
+                    summary_start = i
+                    break
+            if summary_start >= 0:
+                break
+
+        if summary_start < 0:
+            # Fallback: use first 3 substantive lines after name/contact
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                # Skip name/contact lines
+                if (re.match(r"^[一-鿿]{2,4}$", stripped)
+                        or "@" in stripped
+                        or re.search(r"1[3-9]\d{9}", stripped)
+                        or len(stripped) < 8):
+                    continue
+                # Take the next few substantive text blocks
+                summary_lines = [
+                    l.strip() for l in lines[i:i + 8]
+                    if l.strip()
+                    and "工作" not in l
+                    and "教育" not in l
+                    and "项目" not in l
+                    and "skill" not in l.lower()
+                    and not re.search(r"1[3-9]\d{9}", l)
+                    and "@" not in l
+                ]
+                if summary_lines:
+                    return " ".join(summary_lines[:4])
+                break
+            return ""
+
+        # Collect text from the summary section until next section
+        summary_lines: list[str] = []
+        section_markers = [
+            "工作", "教育", "技能", "项目", "联系方式", "语言",
+            "experience", "education", "skill", "project", "contact", "language",
+        ]
+        for line in lines[summary_start + 1:]:
+            stripped = line.strip()
+            if not stripped:
+                if summary_lines:
+                    break  # blank line ends a paragraph
+                continue
+            # Stop at next section
+            line_lower = stripped.lower()
+            if any(m in line_lower for m in section_markers):
+                break
+            if len(stripped) > 5:
+                summary_lines.append(stripped)
+            if len(summary_lines) >= 6:  # Max 6 lines
+                break
+
+        return " ".join(summary_lines) if summary_lines else ""
+
+
+# ---- Skill alias mapping (normalize common variations) ----
+
+_SKILL_ALIASES: dict[str, str] = {
+    "js": "javascript",
+    "ts": "typescript",
+    "cpp": "c++",
+    "k8s": "kubernetes",
+    "nodejs": "node.js",
+    "golang": "go",
+    "react.js": "react",
+    "vue.js": "vue",
+    "next": "next.js",
+    ".net core": ".net",
+    "asp.net": ".net",
+    "express.js": "express",
+    "postgres": "postgresql",
+    "mongo": "mongodb",
+    "elastic": "elasticsearch",
+    "tensorflow": "tensorflow",
+    "pytorch": "pytorch",
+    "scikit": "scikit-learn",
+    "sklearn": "scikit-learn",
+    "tf": "tensorflow",
+    "cicd": "ci/cd",
+    "github actions": "ci/cd",
+    "gitlab ci": "ci/cd",
+    "aws": "aws",
+    "azure": "azure",
+    "gcp": "gcp",
+    "ecs": "docker",
+    "容器": "docker",
+    "容器化": "docker",
+    "微服务": "microservices",
+    "分布式": "分布式系统",
+    "高并发": "高并发",
+    "ddd": "领域驱动设计",
+    "tdd": "测试驱动开发",
+    "restful": "rest api",
+    "rest": "rest api",
+    "graphql": "graphql",
+    "grpc": "grpc",
+    "消息队列": "kafka",
+    "rabbitmq": "kafka",
+    "redis": "redis",
+    "缓存": "redis",
+    "nginx": "nginx",
+    "linux": "linux",
+    "shell": "bash",
+}
+
+
+def _normalize_skill(name: str) -> str:
+    """Normalize a skill name through alias mapping."""
+    return _SKILL_ALIASES.get(name.lower(), name.lower())
+
+
+def _fuzzy_match_skill(text: str, skill: str) -> bool:
+    """Check if a skill appears in text, with fuzzy matching.
+
+    Handles:
+    - Exact match (case-insensitive)
+    - Spacing differences (e.g., "node js" ↔ "node.js")
+    - Alias normalization (e.g., "k8s" ↔ "kubernetes")
+    - Short skills (≤2 chars) use word-boundary matching to prevent
+      substring false positives (e.g., "R" matching inside "Redis")
+    """
+    text_lower = text.lower()
+    skill_lower = skill.lower()
+
+    # For short skill names (1-2 chars), use word boundary to avoid
+    # matching substrings: "r" should match "R, Python" but NOT "Redis"
+    if len(skill_lower) <= 2:
+        pattern = re.compile(rf"\b{re.escape(skill_lower)}\b", re.IGNORECASE)
+        if pattern.search(text):
+            return True
+        # Also check alias with boundary
+        alias = _SKILL_ALIASES.get(skill_lower, "")
+        if alias:
+            alias_pattern = re.compile(rf"\b{re.escape(alias)}\b", re.IGNORECASE)
+            if alias_pattern.search(text):
+                return True
+        return False
+
+    # Normalized matching for longer skill names
+    text_norm = text_lower.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+    skill_norm = skill_lower.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+
+    if skill_norm in text_norm:
+        return True
+
+    # Check alias
+    alias = _SKILL_ALIASES.get(skill_lower, "")
+    if alias:
+        alias_norm = alias.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+        if alias_norm in text_norm:
+            return True
+
+    return False
+
 
 def _fuzzy_contains(text: str, term: str) -> bool:
     """Check if term appears in text, ignoring spacing differences."""

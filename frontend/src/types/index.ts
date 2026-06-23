@@ -172,6 +172,26 @@ export interface InterviewStoppedPayload {
   message: string;
 }
 
+// ---- PR 15: Interview Report Payloads ----
+
+export interface InterviewScoresPayload {
+  technical: number;
+  experience: number;
+  communication: number;
+  role_fit: number;
+  stress: number;
+}
+
+export interface InterviewReportPayload {
+  scores: InterviewScoresPayload;
+  overall_score: number;
+  strengths: string[];
+  weaknesses: string[];
+  summary: string;
+  recommendation: string;
+  generated_at: string;
+}
+
 // ---- UI State Types ----
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';

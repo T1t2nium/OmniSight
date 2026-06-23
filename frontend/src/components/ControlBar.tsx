@@ -8,6 +8,8 @@ interface ControlBarProps {
   onStopConversation: () => void;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  startDisabled?: boolean;
+  startHint?: string;
 }
 
 export function ControlBar({
@@ -18,16 +20,24 @@ export function ControlBar({
   onStopConversation,
   onToggleCamera,
   onToggleMic,
+  startDisabled = false,
+  startHint = '',
 }: ControlBarProps) {
   return (
     <div className="control-bar">
-      <GlassButton
-        variant={conversationActive ? 'danger' : 'primary'}
-        onClick={conversationActive ? onStopConversation : onStartConversation}
-        aria-label={conversationActive ? 'Stop Conversation' : 'Start Conversation'}
-      >
-        {conversationActive ? '⏹ Stop Conversation [Esc]' : '▶ Start Conversation'}
-      </GlassButton>
+      <div className="control-bar__start-group">
+        <GlassButton
+          variant={conversationActive ? 'danger' : 'primary'}
+          onClick={conversationActive ? onStopConversation : onStartConversation}
+          disabled={!conversationActive && startDisabled}
+          aria-label={conversationActive ? 'Stop Conversation' : startDisabled ? startHint : 'Start Conversation'}
+        >
+          {conversationActive ? '⏹ Stop Conversation [Esc]' : '▶ Start Conversation'}
+        </GlassButton>
+        {!conversationActive && startHint && (
+          <span className="control-bar__hint">{startHint}</span>
+        )}
+      </div>
 
       <GlassButton
         variant="default"

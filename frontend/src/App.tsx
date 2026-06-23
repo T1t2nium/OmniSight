@@ -8,6 +8,7 @@ import { AgentSelector } from './components/AgentSelector';
 import { DocumentUpload } from './components/DocumentUpload';
 import type { UploadZoneState } from './components/DocumentUpload';
 import { QuestionBank } from './components/QuestionBank';
+import { ReportViewer } from './components/ReportViewer';
 import NeuralBackground from './components/NeuralBackground';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
@@ -23,6 +24,7 @@ import type {
   DocumentParsedPayload,
   QuestionBankPayload,
   InterviewStoppedPayload,
+  InterviewReportPayload,
 } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
@@ -83,6 +85,23 @@ function App() {
 
   // PR 14: Interview mode state
   const [interviewActive, setInterviewActive] = useState(false);
+  // PR 15: Interview report
+  const [interviewReport, setInterviewReport] = useState<InterviewReportPayload | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Interview Agent: determine if Start button should show a contextual hint
+  const interviewStartHint = useMemo(() => {
+    if (agent.selectedAgentId !== 'interview' || conversationActive) return '';
+    const hasJD = jdZone.status === 'done';
+    const hasResume = resumeZone.status === 'done';
+    if (!hasJD && !hasResume) return '请先上传 JD 和简历';
+    if (!hasJD) return '请先上传 JD（职位描述）';
+    if (!hasResume) return '请先上传简历';
+    if (!questionBank || questionBank.categories.length === 0) return 'AI 正在生成题库...';
+    return ''; // all ready — Start enabled
+  }, [agent.selectedAgentId, conversationActive, jdZone.status, resumeZone.status, questionBank]);
+
+  const startDisabled = interviewStartHint !== '';
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -264,7 +283,17 @@ function App() {
       if (msg.type === 'interview_stopped') {
         const p = msg.payload as unknown as InterviewStoppedPayload;
         setInterviewActive(false);
+        setReportLoading(true);
+        setInterviewReport(null);
         console.log('[App] Interview stopped:', p.message, p.transcript?.length, 'turns');
+        return;
+      }
+
+      // ---- PR 15: Interview report ----
+      if (msg.type === 'interview_report') {
+        const p = msg.payload as unknown as InterviewReportPayload;
+        setInterviewReport(p);
+        setReportLoading(false);
         return;
       }
 
@@ -283,12 +312,8 @@ function App() {
   }, [ws.onMessage]);
 
   const handleStartConversation = useCallback(async () => {
-    // PR 14: Interview mode — start real-time interview via Bailian Realtime
+    // PR 14: Interview mode — start real-time interview
     if (agent.selectedAgentId === 'interview') {
-      if (!questionBank || questionBank.categories.length === 0) {
-        alert('题库尚未就绪，请等待 AI 生成题库后再开始面试。');
-        return;
-      }
       ws.send({
         type: 'start_interview',
         session_id: sessionIdRef.current,
@@ -308,9 +333,9 @@ function App() {
     });
     await media.startMedia();
     setConversationActive(true);
-  }, [media, ws.send, agent.selectedAgentId, questionBank]);
+  }, [media, ws.send, agent.selectedAgentId]);
 
-  const handleStopConversation = useCallback(() => {
+  const handleStopConversation= useCallback(() => {
     media.stopMedia();
     stopPlaybackRef.current();
     // PR 14: Stop interview if active
@@ -333,6 +358,8 @@ function App() {
     setJdZone({ status: 'idle', filename: '', error: '' });
     setResumeZone({ status: 'idle', filename: '', error: '' });
     setQuestionBank(null);
+    setInterviewReport(null);
+    setReportLoading(false);
   }, [media, ws.send, interviewActive]);
 
   // PR 13: Handle document upload start
@@ -463,6 +490,12 @@ function App() {
           visible={agent.uiConfig.show_question_bank}
         />
 
+        <ReportViewer
+          report={interviewReport}
+          visible={agent.uiConfig.show_question_bank && !interviewActive}
+          loading={reportLoading}
+        />
+
         <div className="layout-chat">
           <ChatLog messages={chatMessages} />
         </div>
@@ -476,6 +509,8 @@ function App() {
             onStopConversation={handleStopConversation}
             onToggleCamera={media.toggleCamera}
             onToggleMic={media.toggleMic}
+            startDisabled={startDisabled}
+            startHint={interviewStartHint}
           />
         </div>
       </main>

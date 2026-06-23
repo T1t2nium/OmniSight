@@ -127,3 +127,28 @@ class QuestionBank(BaseModel):
     categories: list[QuestionCategory] = Field(default_factory=list)
     total_questions: int = 0
     generated_at: str = ""  # ISO timestamp
+
+
+# ---- PR 15: Interview Scoring & Report ----
+
+
+class InterviewScores(BaseModel):
+    """5-dimension radar scores from AI analysis of interview transcript."""
+
+    technical: float = 0.0      # 技术能力 0-100
+    experience: float = 0.0     # 项目经验 0-100
+    communication: float = 0.0  # 沟通表达 0-100
+    role_fit: float = 0.0       # 岗位匹配 0-100
+    stress: float = 0.0         # 抗压/应变 0-100
+
+
+class InterviewReport(BaseModel):
+    """AI-generated post-interview analysis report."""
+
+    scores: InterviewScores = Field(default_factory=InterviewScores)
+    overall_score: float = 0.0
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    summary: str = ""
+    recommendation: str = ""   # "强烈推荐"/"推荐"/"保留意见"/"不推荐"
+    generated_at: str = ""      # ISO timestamp

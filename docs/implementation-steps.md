@@ -22,7 +22,7 @@
 | 12 | `phase/12-document-parser` | 文档解析 + 实体提取服务 ✅ | PR 11 |
 | 13 | `phase/13-interview-agent-pre` | InterviewAgent 面试前 + 题库生成 ✅ | PR 12 |
 | 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR ✅ | PR 13 |
-| 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 评分 + 报告 | PR 14 |
+| 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 雷达评分 + AI 报告 ✅ | PR 14 |
 | 16 | `phase/16-integration` | 端到端集成测试 + 文档完善 | PR 15 |
 
 ---
@@ -456,3 +456,32 @@ audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=ins
 - ✅ `npx tsc --noEmit` 零类型错误
 - ✅ 本地 TTS/STT 流水线不受影响
 - ✅ 题库未就绪时前端拦截
+
+---
+
+## PR 15: InterviewAgent 面试后 — 结构化雷达评分 + AI 决策报告
+
+### 任务清单
+
+- [x] 后端：`InterviewScores` + `InterviewReport` 数据模型（5 维评分 0-100）
+- [x] 后端：`InterviewScorer` — AI 评分 + 报告生成器（JSON 解析 + 降级兜底）
+- [x] 后端：`ws.py` `_handle_stop_interview` 异步触发 `_generate_interview_report`
+- [x] 后端：`interview_report` WS 消息发送到前端
+- [x] 后端：`entity_extractor` 模糊技能匹配 + 60+ 别名映射 + 简历摘要提取 + 短技能词边界修复
+- [x] 后端：`question_generator` 题库 prompt 增加工作经历详情 + 候选人自我描述
+- [x] 前端：`RadarChart` — 纯 Canvas 五维雷达图（零依赖）
+- [x] 前端：`ReportViewer` — 折叠报告卡片 + 加载骨架屏
+- [x] 前端：`QuestionBank` 重构为下拉菜单（胶囊按钮 + popover）
+- [x] 前端：`ControlBar` Start 按钮 contextual hint（逐步引导上传文档）
+- [x] 前端：Vite 插件静默 WS proxy ECONNABORTED 错误
+- [x] 测试：17 新增测试（MockAIClient + JSON 解析 + fallback）
+
+### 验证标准
+
+- ✅ 129/129 测试全绿（+17 new）
+- ✅ `npx tsc --noEmit` 零类型错误
+- ✅ AI 解析失败时降级至 fallback 报告
+- ✅ ReportViewer 加载骨架 → 淡入真实报告
+- ✅ QuestionBank 下拉菜单不影响布局
+- ✅ 题库问题更贴合简历内容（工作经历入 prompt + 模糊匹配）
+
