@@ -39,7 +39,7 @@ class SessionState:
     resume_filename: str = ""
     # PR 14: interview during state
     interview_active: bool = False
-    interview_engine: object | None = None  # DuringInterviewEngine (not serializable)
+    interview_instructions: str = ""  # Built from question bank + JD + resume
     interview_transcript: list[dict] = field(default_factory=list)
 
 
