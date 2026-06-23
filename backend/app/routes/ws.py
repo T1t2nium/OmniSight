@@ -362,7 +362,7 @@ async def _handle_start_interview(
         session.history = []
 
         # Notify frontend
-        started = InterviewStartedPayload(phase="icebreaker")
+        started = InterviewStartedPayload()
         await _send_message(ws, session_id, "interview_started", started.model_dump())
 
         logger.info("Interview started for session %s — %d chars of instructions",

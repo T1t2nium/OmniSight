@@ -22,7 +22,6 @@ import type {
   InterruptPayload,
   DocumentParsedPayload,
   QuestionBankPayload,
-  InterviewStartedPayload,
   InterviewStoppedPayload,
 } from './types';
 
@@ -84,7 +83,6 @@ function App() {
 
   // PR 14: Interview mode state
   const [interviewActive, setInterviewActive] = useState(false);
-  const [interviewPhase, setInterviewPhase] = useState('');
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -257,9 +255,7 @@ function App() {
 
       // ---- PR 14: Interview started ----
       if (msg.type === 'interview_started') {
-        const p = msg.payload as unknown as InterviewStartedPayload;
         setInterviewActive(true);
-        setInterviewPhase(p.phase || 'icebreaker');
         setConversationActive(true);
         return;
       }
@@ -268,7 +264,6 @@ function App() {
       if (msg.type === 'interview_stopped') {
         const p = msg.payload as unknown as InterviewStoppedPayload;
         setInterviewActive(false);
-        setInterviewPhase('');
         console.log('[App] Interview stopped:', p.message, p.transcript?.length, 'turns');
         return;
       }
@@ -327,7 +322,6 @@ function App() {
         payload: {},
       });
       setInterviewActive(false);
-      setInterviewPhase('');
     }
     setConversationActive(false);
     setChatMessages([]);
@@ -403,13 +397,7 @@ function App() {
         <h1>OmniSight</h1>
         <span className="app-subtitle">AI Vision</span>
         {interviewActive && (
-          <span className="interview-phase">
-            {interviewPhase === 'icebreaker' ? '🧊 破冰环节' :
-             interviewPhase === 'technical' ? '💻 专业技能' :
-             interviewPhase === 'behavioral' ? '🎯 STAR 行为' :
-             interviewPhase === 'stress' ? '⚡ 压力测试' :
-             '🎙️ 面试中'}
-          </span>
+          <span className="interview-phase">🎙️ 面试中</span>
         )}
         <div className="app-header__agent">
           <AgentSelector
