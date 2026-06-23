@@ -80,16 +80,6 @@ function App() {
   });
   const [questionBank, setQuestionBank] = useState<QuestionBankPayload | null>(null);
 
-  // Auto-collapse side panel when both documents are uploaded and parsed
-  const panelBothDone = jdZone.status === 'done' && resumeZone.status === 'done';
-  const [panelUserExpanded, setPanelUserExpanded] = useState(false);
-  const panelCollapsed = panelBothDone && !panelUserExpanded;
-
-  // Reset panel state when agent changes
-  useEffect(() => {
-    setPanelUserExpanded(false);
-  }, [agent.selectedAgentId]);
-
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
     if (!conversationActive) return '#6366f1';  // indigo
@@ -291,7 +281,6 @@ function App() {
     setJdZone({ status: 'idle', filename: '', error: '' });
     setResumeZone({ status: 'idle', filename: '', error: '' });
     setQuestionBank(null);
-    setPanelUserExpanded(false);
   }, [media]);
 
   // PR 13: Handle document upload start
@@ -365,32 +354,28 @@ function App() {
       </header>
 
       <main className="app-main">
-        <div className="layout-top">
-          <div className="layout-top__video">
-            <VideoPanel
-              stream={media.stream}
-              cameraEnabled={media.cameraEnabled}
-              streamVersion={media.streamVersion}
-            />
+        <div className="layout-top-row">
+          <div className="layout-top">
+            <div className="layout-top__video">
+              <VideoPanel
+                stream={media.stream}
+                cameraEnabled={media.cameraEnabled}
+                streamVersion={media.streamVersion}
+              />
+            </div>
           </div>
-          <div
-            className={`layout-top__side${
-              agent.uiConfig.show_document_upload ? ' layout-top__side--open' : ''
-            }${
-              panelCollapsed ? ' layout-top__side--collapsed' : ''
-            }`}
-            onClick={panelCollapsed ? () => setPanelUserExpanded(true) : undefined}
-          >
-            <DocumentUpload
-              send={ws.send}
-              sessionId={sessionIdRef.current}
-              visible={agent.uiConfig.show_document_upload}
-              collapsed={panelCollapsed}
-              jdZone={jdZone}
-              resumeZone={resumeZone}
-              onUploadStart={handleUploadStart}
-            />
-          </div>
+          {agent.uiConfig.show_document_upload && (
+            <div className="layout-top__side">
+              <DocumentUpload
+                send={ws.send}
+                sessionId={sessionIdRef.current}
+                visible={true}
+                jdZone={jdZone}
+                resumeZone={resumeZone}
+                onUploadStart={handleUploadStart}
+              />
+            </div>
+          )}
         </div>
 
         <div className="layout-status">
