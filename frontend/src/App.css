@@ -1262,22 +1262,28 @@ html, body, #root {
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   max-height: 340px;
-  overflow-y: auto;
   flex-shrink: 0;
+  /* overflow handled by child .question-bank__body */
 }
 
-.question-bank::-webkit-scrollbar {
+.question-bank__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.question-bank__body::-webkit-scrollbar {
   width: 4px;
 }
 
-.question-bank::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.question-bank::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+.question-bank__body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-full);
 }
 
