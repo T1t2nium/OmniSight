@@ -6,6 +6,7 @@ import type { InterviewReportPayload } from '../types';
 interface ReportViewerProps {
   report: InterviewReportPayload | null;
   visible: boolean;
+  loading?: boolean;
 }
 
 /** Color map for recommendation levels. */
@@ -25,10 +26,29 @@ const SCORE_LABELS: Record<string, string> = {
   stress: '抗压应变',
 };
 
-export function ReportViewer({ report, visible }: ReportViewerProps) {
+export function ReportViewer({ report, visible, loading = false }: ReportViewerProps) {
   const [expanded, setExpanded] = useState(false);
 
-  if (!visible || !report) return null;
+  if (!visible) return null;
+
+  // Show loading skeleton while AI is scoring
+  if (loading && !report) {
+    return (
+      <div className="report-viewer report-viewer--loading">
+        <div className="report-viewer__header">
+          <span className="report-viewer__title">📊 AI 正在生成评估报告...</span>
+          <span className="report-viewer__spinner" />
+        </div>
+        <div className="report-viewer__skeleton">
+          <div className="report-viewer__skel-bar" />
+          <div className="report-viewer__skel-bar" />
+          <div className="report-viewer__skel-bar report-viewer__skel-bar--short" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) return null;
 
   const scores = report.scores;
   const radarScores: RadarScore[] = Object.entries(scores).map(([key, val]) => ({

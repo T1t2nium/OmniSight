@@ -87,6 +87,7 @@ function App() {
   const [interviewActive, setInterviewActive] = useState(false);
   // PR 15: Interview report
   const [interviewReport, setInterviewReport] = useState<InterviewReportPayload | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   // Interview Agent: determine if Start button should show a contextual hint
   const interviewStartHint = useMemo(() => {
@@ -282,6 +283,8 @@ function App() {
       if (msg.type === 'interview_stopped') {
         const p = msg.payload as unknown as InterviewStoppedPayload;
         setInterviewActive(false);
+        setReportLoading(true);
+        setInterviewReport(null);
         console.log('[App] Interview stopped:', p.message, p.transcript?.length, 'turns');
         return;
       }
@@ -290,6 +293,7 @@ function App() {
       if (msg.type === 'interview_report') {
         const p = msg.payload as unknown as InterviewReportPayload;
         setInterviewReport(p);
+        setReportLoading(false);
         return;
       }
 
@@ -355,6 +359,7 @@ function App() {
     setResumeZone({ status: 'idle', filename: '', error: '' });
     setQuestionBank(null);
     setInterviewReport(null);
+    setReportLoading(false);
   }, [media, ws.send, interviewActive]);
 
   // PR 13: Handle document upload start
@@ -488,6 +493,7 @@ function App() {
         <ReportViewer
           report={interviewReport}
           visible={agent.uiConfig.show_question_bank && !interviewActive}
+          loading={reportLoading}
         />
 
         <div className="layout-chat">
