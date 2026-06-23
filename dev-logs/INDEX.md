@@ -22,6 +22,7 @@
 | 2026-06-23 | **PR 12 — 文档解析 + 实体提取服务 ✅** | [2026-06-23-pr12-document-parser.md](2026-06-23-pr12-document-parser.md) |
 | 2026-06-23 | **PR 13 — InterviewAgent 面试前 + 文档上传 + 题库生成 ✅** | [2026-06-23-pr13-interview-agent-pre.md](2026-06-23-pr13-interview-agent-pre.md) |
 | 2026-06-23 | **PR 14 — InterviewAgent 面试中 — 增强指令 + STAR 追问 ✅** | [2026-06-23-pr14-interview-during.md](2026-06-23-pr14-interview-during.md) |
+| 2026-06-23 | **PR 15 — InterviewAgent 面试后 — 雷达评分 + AI 报告 ✅** | [2026-06-23-pr15-interview-post.md](2026-06-23-pr15-interview-post.md) |
 
 ---
 

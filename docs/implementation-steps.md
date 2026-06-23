@@ -22,7 +22,7 @@
 | 12 | `phase/12-document-parser` | 文档解析 + 实体提取服务 ✅ | PR 11 |
 | 13 | `phase/13-interview-agent-pre` | InterviewAgent 面试前 + 题库生成 ✅ | PR 12 |
 | 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR ✅ | PR 13 |
-| 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 评分 + 报告 | PR 14 |
+| 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 雷达评分 + AI 报告 ✅ | PR 14 |
 | 16 | `phase/16-integration` | 端到端集成测试 + 文档完善 | PR 15 |
 
 ---
@@ -456,3 +456,26 @@ audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=ins
 - ✅ `npx tsc --noEmit` 零类型错误
 - ✅ 本地 TTS/STT 流水线不受影响
 - ✅ 题库未就绪时前端拦截
+
+---
+
+## PR 15: InterviewAgent 面试后 — 结构化雷达评分 + AI 决策报告
+
+### 任务清单
+
+- [x] 后端：`InterviewScores` + `InterviewReport` 数据模型（5 维评分 0-100）
+- [x] 后端：`InterviewScorer` — AI 评分 + 报告生成器（JSON 解析 + 降级兜底）
+- [x] 后端：`ws.py` `_handle_stop_interview` 异步触发 `_generate_interview_report`
+- [x] 后端：`interview_report` WS 消息发送到前端
+- [x] 前端：`RadarChart` — 纯 Canvas 五维雷达图（零依赖）
+- [x] 前端：`ReportViewer` — 报告卡片（雷达图 + 评分条 + 强弱项 + 录用建议）
+- [x] 前端：`App.tsx` 处理 `interview_report` 消息 + 渲染 ReportViewer
+- [x] 测试：17 新增测试（MockAIClient + JSON 解析 + fallback）
+
+### 验证标准
+
+- ✅ 129/129 测试全绿（+17 new）
+- ✅ `npx tsc --noEmit` 零类型错误
+- ✅ AI 解析失败时降级至 fallback 报告
+- ✅ 前端评分条 + 雷达图动画渲染
+

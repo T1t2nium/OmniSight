@@ -8,6 +8,7 @@ import { AgentSelector } from './components/AgentSelector';
 import { DocumentUpload } from './components/DocumentUpload';
 import type { UploadZoneState } from './components/DocumentUpload';
 import { QuestionBank } from './components/QuestionBank';
+import { ReportViewer } from './components/ReportViewer';
 import NeuralBackground from './components/NeuralBackground';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
@@ -23,6 +24,7 @@ import type {
   DocumentParsedPayload,
   QuestionBankPayload,
   InterviewStoppedPayload,
+  InterviewReportPayload,
 } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
@@ -83,6 +85,8 @@ function App() {
 
   // PR 14: Interview mode state
   const [interviewActive, setInterviewActive] = useState(false);
+  // PR 15: Interview report
+  const [interviewReport, setInterviewReport] = useState<InterviewReportPayload | null>(null);
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -268,6 +272,13 @@ function App() {
         return;
       }
 
+      // ---- PR 15: Interview report ----
+      if (msg.type === 'interview_report') {
+        const p = msg.payload as unknown as InterviewReportPayload;
+        setInterviewReport(p);
+        return;
+      }
+
       // Deduplicate ai_status — replace previous instead of appending
       if (msg.type === 'ai_status') {
         setChatMessages((prev) => {
@@ -333,6 +344,7 @@ function App() {
     setJdZone({ status: 'idle', filename: '', error: '' });
     setResumeZone({ status: 'idle', filename: '', error: '' });
     setQuestionBank(null);
+    setInterviewReport(null);
   }, [media, ws.send, interviewActive]);
 
   // PR 13: Handle document upload start
@@ -461,6 +473,11 @@ function App() {
         <QuestionBank
           bank={questionBank}
           visible={agent.uiConfig.show_question_bank}
+        />
+
+        <ReportViewer
+          report={interviewReport}
+          visible={agent.uiConfig.show_question_bank && !interviewActive}
         />
 
         <div className="layout-chat">

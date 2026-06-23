@@ -174,3 +174,17 @@ class InterviewStoppedPayload(BaseModel):
 
     transcript: list[dict] = Field(default_factory=list)
     message: str = ""
+
+
+# ---- PR 15: Interview Report Payload ----
+
+class InterviewReportPayload(BaseModel):
+    """Sent by server with AI-generated post-interview analysis."""
+
+    scores: dict = Field(default_factory=dict)  # {technical, experience, communication, role_fit, stress}
+    overall_score: float = 0.0
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    summary: str = ""
+    recommendation: str = ""
+    generated_at: str = ""

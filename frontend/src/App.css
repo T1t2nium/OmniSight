@@ -1395,3 +1395,176 @@ body {
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
 }
+
+/* ===== PR 15: Interview Report Viewer ===== */
+
+.report-viewer {
+  flex-shrink: 0;
+  margin: var(--space-3) var(--space-5);
+  padding: var(--space-4);
+  background: rgba(15, 15, 20, 0.35);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-lg, 12px);
+  animation: report-fade-in 0.4s ease;
+}
+
+@keyframes report-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.report-viewer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.report-viewer__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.report-viewer__badge {
+  padding: 2px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.report-viewer__body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.report-viewer__radar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.report-viewer__overall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.report-viewer__overall-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.report-viewer__overall-label {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.report-viewer__details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.report-viewer__score-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.report-viewer__score-label {
+  width: 56px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.report-viewer__score-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.report-viewer__score-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.report-viewer__score-value {
+  width: 24px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.report-viewer__summary {
+  margin-top: var(--space-2);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.5;
+}
+
+.report-viewer__lists {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.report-viewer__list {
+  flex: 1;
+}
+
+.report-viewer__list-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.report-viewer__list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.report-viewer__list li {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 3px 0;
+  padding-left: var(--space-3);
+  position: relative;
+}
+
+.report-viewer__list li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  opacity: 0.5;
+}
+
+.report-viewer__list--strength li::before {
+  color: #10b981;
+}
+
+.report-viewer__list--weakness li::before {
+  color: #fbbf24;
+}
+
+/* Radar chart canvas */
+.radar-chart {
+  display: block;
+}

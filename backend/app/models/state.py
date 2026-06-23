@@ -41,6 +41,8 @@ class SessionState:
     interview_active: bool = False
     interview_instructions: str = ""  # Built from question bank + JD + resume
     interview_transcript: list[dict] = field(default_factory=list)
+    # PR 15: interview post state
+    interview_report: dict | None = None  # InterviewReport.model_dump()
 
 
 class ConnectionStateManager:
