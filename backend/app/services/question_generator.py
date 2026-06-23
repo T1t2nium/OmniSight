@@ -130,6 +130,8 @@ class QuestionGenerator:
         parts.append("\n## 候选人背景")
         if resume.name:
             parts.append(f"- 姓名：{resume.name}")
+        if resume.summary:
+            parts.append(f"- 自我描述：{resume.summary[:300]}")
         if resume.skills:
             parts.append(f"- 技能：{', '.join(resume.skills[:15])}")
         if resume.total_years > 0:
@@ -138,6 +140,22 @@ class QuestionGenerator:
             schools = [e.get("school", "") for e in resume.education[:3] if e.get("school")]
             if schools:
                 parts.append(f"- 教育背景：{', '.join(schools)}")
+
+        # Work experience details — critical for targeted questions
+        if resume.work_experiences:
+            parts.append("\n### 工作经历详情")
+            for exp in resume.work_experiences[:4]:
+                exp_parts = []
+                if exp.title:
+                    exp_parts.append(exp.title)
+                if exp.company:
+                    exp_parts.append(f"@{exp.company}")
+                if exp.start_date:
+                    period = f"{exp.start_date} – {exp.end_date or '至今'}"
+                    exp_parts.append(f"({period})")
+                parts.append("- " + " ".join(exp_parts))
+                if exp.description:
+                    parts.append(f"  描述: {exp.description[:200]}")
 
         # Match analysis
         parts.append("\n## 匹配分析")
