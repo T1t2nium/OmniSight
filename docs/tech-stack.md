@@ -81,12 +81,32 @@ uv sync                  # 按 pyproject.toml 同步依赖
 | **BaseAgent (ABC)** | Agent 抽象协议 | 零依赖，定义 agent_id/name/description/system_prompt |
 | **AgentRegistry** | Agent 注册表 | 类方法单例，注册/查找/列表 |
 | **ChatAgent** | 默认 Agent | 视觉聊天伴侣，复用已有 SYSTEM_PROMPT |
+| **InterviewAgent** | 面试 Agent | 企业海面助手，三阶段管线（前/中/后） |
+
+### 文档与面试套件
+
+| 技术 | 用途 | 选择理由 |
+|------|------|---------|
+| **pdfplumber** | PDF 文本提取 | 纯 Python，表格支持，中文兼容 |
+| **python-docx** | DOCX 文本提取 | 标准库，轻量 |
+| **websockets** | 百炼 Realtime WS 客户端 | 纯 Python，无 C 扩展，>=14.0 |
 
 ### 可选云端备选
 
 | 技术 | 用途 |
 |------|------|
 | **google-genai** | Gemini Live API（云端备选） |
+
+### 后端服务总览
+
+| 服务 | 职责 |
+|------|------|
+| `document_parser.py` | PDF/DOCX 文本提取 |
+| `entity_extractor.py` | JD/简历规则实体提取 + 加权技能匹配 |
+| `question_generator.py` | AI 驱动的结构化面试题库生成 |
+| `interview_engine.py` | 面试中 instructions 构建 |
+| `interview_scorer.py` | AI 五维评分 + 决策报告生成 |
+| `bailian_ws_client.py` | 百炼 Realtime WebSocket 客户端（备用） |
 
 ---
 
@@ -102,6 +122,10 @@ uv sync                  # 按 pyproject.toml 同步依赖
 {"type": "video_frame", "data": "<base64 jpeg>", "timestamp": 1234567890, "width": 640, "height": 480}
 {"type": "vad_event", "event": "speech_start | speech_end", "timestamp": 1234567890}
 {"type": "agent_select", "payload": {"agent_id": "chat"}, "timestamp": 1234567890}
+{"type": "reset_conversation", "payload": {}}
+{"type": "document_upload", "payload": {"doc_type": "jd|resume", "filename": "...", "data": "<base64>"}}
+{"type": "start_interview", "payload": {}}
+{"type": "stop_interview", "payload": {}}
 ```
 
 **服务器 → 浏览器**：
@@ -113,6 +137,11 @@ uv sync                  # 按 pyproject.toml 同步依赖
 {"type": "tts_audio", "payload": {"data": "<base64 pcm16>", "sample_rate": 44100}}
 {"type": "interrupt", "payload": {"reason": "user_interrupt"}}
 {"type": "error", "payload": {"message": "错误描述"}}
+{"type": "document_parsed", "payload": {"doc_type": "jd|resume", "jd_entities": {...}, "match_result": {...}}}
+{"type": "question_bank", "payload": {"categories": [...], "total_questions": 12}}
+{"type": "interview_started", "payload": {"phase": "icebreaker"}}
+{"type": "interview_stopped", "payload": {"transcript": [...], "message": "..."}}
+{"type": "interview_report", "payload": {"scores": {...}, "overall_score": 75, "strengths": [...], ...}}
 ```
 
 ---

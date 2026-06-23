@@ -6,6 +6,7 @@ individual test files don't need to duplicate setup logic.
 
 from __future__ import annotations
 
+import json
 import struct
 import uuid
 
@@ -17,6 +18,58 @@ from app.config import Settings
 from app.main import app
 from app.models.state import ConnectionStateManager
 from app.services.audio import AudioBufferManager
+from app.services.base_ai_client import BaseAIClient
+
+
+# ---- Mock AI Client (shared across integration tests) ----
+
+
+class MockAIClient(BaseAIClient):
+    """Returns a controlled response for integration tests.
+
+    Set ``_response`` to the JSON string you want the client to yield
+    as a single ``delta`` chunk with ``done=True``.
+    """
+
+    def __init__(self, response_text: str = "", model: str = "mock"):
+        self._response = response_text
+        self._model = model
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def provider_name(self) -> str:
+        return "mock"
+
+    async def chat(self, transcript, image_base64=None, history=None,
+                   system_prompt=None):
+        yield {"delta": self._response, "done": True, "total_duration": 0.1}
+
+    async def check_health(self) -> bool:
+        return True
+
+    async def close(self) -> None:
+        pass
+
+
+def mock_report_json() -> str:
+    """Return a valid interview report JSON string for MockAIClient."""
+    return json.dumps({
+        "scores": {
+            "technical": 80,
+            "experience": 75,
+            "communication": 85,
+            "role_fit": 70,
+            "stress": 65,
+        },
+        "overall_score": 75,
+        "strengths": ["Python经验丰富", "沟通表达清晰"],
+        "weaknesses": ["缺少FastAPI经验", "压力测试表现一般"],
+        "summary": "候选人技术基础扎实，沟通能力好，但部分核心技能有缺口。",
+        "recommendation": "推荐",
+    })
 
 
 @pytest.fixture(scope="session")
