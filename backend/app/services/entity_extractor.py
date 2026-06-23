@@ -798,16 +798,35 @@ def _fuzzy_match_skill(text: str, skill: str) -> bool:
     - Exact match (case-insensitive)
     - Spacing differences (e.g., "node js" ↔ "node.js")
     - Alias normalization (e.g., "k8s" ↔ "kubernetes")
+    - Short skills (≤2 chars) use word-boundary matching to prevent
+      substring false positives (e.g., "R" matching inside "Redis")
     """
-    text_norm = text.lower().replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
-    skill_norm = skill.lower().replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+    text_lower = text.lower()
+    skill_lower = skill.lower()
 
-    # Direct match
+    # For short skill names (1-2 chars), use word boundary to avoid
+    # matching substrings: "r" should match "R, Python" but NOT "Redis"
+    if len(skill_lower) <= 2:
+        pattern = re.compile(rf"\b{re.escape(skill_lower)}\b", re.IGNORECASE)
+        if pattern.search(text):
+            return True
+        # Also check alias with boundary
+        alias = _SKILL_ALIASES.get(skill_lower, "")
+        if alias:
+            alias_pattern = re.compile(rf"\b{re.escape(alias)}\b", re.IGNORECASE)
+            if alias_pattern.search(text):
+                return True
+        return False
+
+    # Normalized matching for longer skill names
+    text_norm = text_lower.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+    skill_norm = skill_lower.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
+
     if skill_norm in text_norm:
         return True
 
     # Check alias
-    alias = _SKILL_ALIASES.get(skill.lower(), "")
+    alias = _SKILL_ALIASES.get(skill_lower, "")
     if alias:
         alias_norm = alias.replace(" ", "").replace(".", "").replace("-", "").replace("_", "")
         if alias_norm in text_norm:
