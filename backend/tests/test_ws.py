@@ -200,6 +200,29 @@ def test_missing_session_id():
         assert "session_id" in resp["payload"]["message"].lower()
 
 
+def test_reset_conversation_clears_history():
+    """reset_conversation message returns echo confirmation."""
+    client = TestClient(app)
+    with client.websocket_connect("/ws") as ws:
+        sid = f"test-reset-{uuid.uuid4().hex[:8]}"
+
+        # Receive agent_list (sent immediately on connect)
+        ws.receive_json()
+
+        # Register session via any valid message
+        ws.send_json(_make_msg("vad_event", sid, {"event": "speech_start"}))
+        ws.receive_json()  # server_status
+        ws.receive_json()  # echo for vad_event
+
+        # Send reset_conversation
+        ws.send_json(_make_msg("reset_conversation", sid, {}))
+
+        # Should receive echo confirmation (exactly 1 message)
+        resp = ws.receive_json()
+        assert resp["type"] == "echo"
+        assert resp["payload"]["received_type"] == "reset_conversation"
+
+
 def test_health_endpoint():
     """GET /health returns expected fields."""
     client = TestClient(app)

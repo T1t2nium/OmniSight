@@ -5,6 +5,9 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { ControlBar } from './components/ControlBar';
 import { ChatLog } from './components/ChatLog';
 import { AgentSelector } from './components/AgentSelector';
+import { DocumentUpload } from './components/DocumentUpload';
+import type { UploadZoneState } from './components/DocumentUpload';
+import { QuestionBank } from './components/QuestionBank';
 import NeuralBackground from './components/NeuralBackground';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaStream } from './hooks/useMediaStream';
@@ -17,6 +20,8 @@ import type {
   LLMResponsePayload,
   TTSAudioPayload,
   InterruptPayload,
+  DocumentParsedPayload,
+  QuestionBankPayload,
 } from './types';
 
 /** Mute repetitive echo types (fired at high frequency). */
@@ -65,6 +70,15 @@ function App() {
 
   // PR 11: Agent selection
   const agent = useAgent(ws.send, ws.onMessage, sessionIdRef.current);
+
+  // PR 13: Document upload state (lifted to App for server response handling)
+  const [jdZone, setJdZone] = useState<UploadZoneState>({
+    status: 'idle', filename: '', error: '',
+  });
+  const [resumeZone, setResumeZone] = useState<UploadZoneState>({
+    status: 'idle', filename: '', error: '',
+  });
+  const [questionBank, setQuestionBank] = useState<QuestionBankPayload | null>(null);
 
   // ---- Background ambiance: particle color follows conversation state ----
   const ambianceColor = useMemo(() => {
@@ -217,6 +231,24 @@ function App() {
         return;
       }
 
+      // ---- PR 13: Document parsed response ----
+      if (msg.type === 'document_parsed') {
+        const p = msg.payload as unknown as DocumentParsedPayload;
+        if (p.doc_type === 'jd') {
+          setJdZone((prev) => ({ ...prev, status: 'done', filename: p.filename || prev.filename, error: '' }));
+        } else {
+          setResumeZone((prev) => ({ ...prev, status: 'done', filename: p.filename || prev.filename, error: '' }));
+        }
+        return;
+      }
+
+      // ---- PR 13: Question bank received ----
+      if (msg.type === 'question_bank') {
+        const p = msg.payload as unknown as QuestionBankPayload;
+        setQuestionBank(p);
+        return;
+      }
+
       // Deduplicate ai_status — replace previous instead of appending
       if (msg.type === 'ai_status') {
         setChatMessages((prev) => {
@@ -232,9 +264,16 @@ function App() {
   }, [ws.onMessage]);
 
   const handleStartConversation = useCallback(async () => {
+    // Reset backend conversation history for a clean session
+    ws.send({
+      type: 'reset_conversation',
+      session_id: sessionIdRef.current,
+      timestamp: Date.now() / 1000,
+      payload: {},
+    });
     await media.startMedia();
     setConversationActive(true);
-  }, [media]);
+  }, [media, ws.send]);
 
   const handleStopConversation = useCallback(() => {
     media.stopMedia();
@@ -245,7 +284,21 @@ function App() {
     setTotalAudioMs(0);
     llmBufferRef.current = '';
     ttsProviderRef.current = 'browser';
+    // PR 13: Reset interview state
+    setJdZone({ status: 'idle', filename: '', error: '' });
+    setResumeZone({ status: 'idle', filename: '', error: '' });
+    setQuestionBank(null);
   }, [media]);
+
+  // PR 13: Handle document upload start
+  const handleUploadStart = useCallback((docType: 'jd' | 'resume', filename: string) => {
+    const setter = docType === 'jd' ? setJdZone : setResumeZone;
+    if (!filename) {
+      setter({ status: 'error', filename: '', error: '仅支持 PDF 和 DOCX 文件' });
+    } else {
+      setter({ status: 'uploading', filename, error: '' });
+    }
+  }, []);
 
   // ---- PR 5: Keyboard shortcuts ----
   useEffect(() => {
@@ -303,17 +356,34 @@ function App() {
             agents={agent.agents}
             selectedAgentId={agent.selectedAgentId}
             onSelect={agent.selectAgent}
+            disabled={conversationActive}
           />
         </div>
       </header>
 
       <main className="app-main">
-        <div className="layout-top">
-          <VideoPanel
-            stream={media.stream}
-            cameraEnabled={media.cameraEnabled}
-            streamVersion={media.streamVersion}
-          />
+        <div className="layout-top-row">
+          <div className="layout-top">
+            <div className="layout-top__video">
+              <VideoPanel
+                stream={media.stream}
+                cameraEnabled={media.cameraEnabled}
+                streamVersion={media.streamVersion}
+              />
+            </div>
+          </div>
+          {agent.uiConfig.show_document_upload && (
+            <div className="layout-top__side">
+              <DocumentUpload
+                send={ws.send}
+                sessionId={sessionIdRef.current}
+                visible={true}
+                jdZone={jdZone}
+                resumeZone={resumeZone}
+                onUploadStart={handleUploadStart}
+              />
+            </div>
+          )}
         </div>
 
         <div className="layout-status">
@@ -339,6 +409,11 @@ function App() {
             <span className="vad-error">VAD: {vad.vadError}</span>
           )}
         </div>
+
+        <QuestionBank
+          bank={questionBank}
+          visible={agent.uiConfig.show_question_bank}
+        />
 
         <div className="layout-chat">
           <ChatLog messages={chatMessages} />

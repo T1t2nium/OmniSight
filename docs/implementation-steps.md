@@ -19,6 +19,11 @@
 | 9 | `phase/9-frontend-ui-final` | 前端 UI 终极优化：Canvas 背景 + 玻璃按钮 ✅ | PR 8 |
 | 10 | `phase/10-ai-provider-abstraction` | AI Provider 抽象层 + 百炼 HTTP 集成 ✅ | PR 9 |
 | 11 | `phase/11-agent-framework` | Agent 框架 + Agent 选择器 UI ✅ | PR 10 |
+| 12 | `phase/12-document-parser` | 文档解析 + 实体提取服务 ✅ | PR 11 |
+| 13 | `phase/13-interview-agent-pre` | InterviewAgent 面试前 + 题库生成 ✅ | PR 12 |
+| 14 | `phase/14-interview-during` | InterviewAgent 面试中 — 全双工语音 + STAR | PR 13 |
+| 15 | `phase/15-interview-post` | InterviewAgent 面试后 — 评分 + 报告 | PR 14 |
+| 16 | `phase/16-integration` | 端到端集成测试 + 文档完善 | PR 15 |
 
 ---
 
@@ -311,3 +316,109 @@
 - ✅ 鼠标移动粒子排斥交互正常
 - ✅ 玻璃按钮磨砂效果 + 状态颜色切换正常
 - ✅ `prefers-reduced-motion` 动画停止
+
+---
+
+## PR 10: AI Provider 抽象层 + 阿里云百炼 HTTP 集成
+
+### 任务清单
+
+- [x] 后端：`BaseAIClient` ABC 抽象 `chat()` / `check_health()` / `close()`
+- [x] 后端：`BailianHTTPClient` 实现（httpx NDJSON 流式，请求签名认证）
+- [x] 后端：`OllamaClient` 重构实现 BaseAIClient
+- [x] 后端：`chat()` 添加可选的 `system_prompt` 参数
+- [x] 后端：`conversation.py` 转发 `system_prompt` 到 AI Client
+- [x] 后端：`main.py` `ai_provider` 配置切换 + health 端点扩展
+- [x] 后端：`config.py` 百炼 API Key / workspace / model 配置
+- [x] 后端：单 chunk 完整 LLM 响应渲染修复（Bailian 不流式）
+- [x] 后端：原始 JSON Lines 解析（非 SSE `data:` 前缀）
+- [x] 文档：CLAUDE.md 更新
+
+### 验证标准
+
+- ✅ `uv run pytest tests/` 31/31 全绿
+- ✅ Ollama → Bailian 切换正常，`AI_PROVIDER=bailian` 生效
+- ✅ Bailian 模型返回中文响应
+
+---
+
+## PR 11: Agent 框架 + Agent 选择器 UI
+
+### 任务清单
+
+- [x] 后端：`BaseAgent` ABC — `agent_id` / `name` / `description` / `system_prompt` / `get_ui_config()`
+- [x] 后端：`AgentRegistry` — 类方法单例 `register()` / `get()` / `list_agents()`
+- [x] 后端：`ChatAgent` — 默认「视觉聊天伴侣」
+- [x] 后端：`ws.py` `agent_list` 即时推送（WebSocket connect）+ `agent_select` 处理
+- [x] 后端：`session.selected_agent` → `AgentRegistry.get()` → `orchestrator.process_utterance(system_prompt=...)`
+- [x] 后端：`schemas.py` AgentInfo / AgentListPayload / AgentSelectPayload
+- [x] 后端：`main.py` 注册 ChatAgent
+- [x] 前端：`useAgent` hook — 监听 agent_list + selectAgent()
+- [x] 前端：`AgentSelector` — 玻璃态胶囊标签（单选/多选）
+- [x] 前端：`App.tsx` 集成 AgentSelector
+
+### 验证标准
+
+- ✅ 37/37 后端测试全绿
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ Agent 标签在 WebSocket 连接后立即显示（无需开始对话）
+- ✅ Agent 切换时 system_prompt 正确注入 AI pipeline
+
+---
+
+## PR 12: 文档解析 + 实体提取服务
+
+### 任务清单
+
+- [x] 后端：`DocumentParser` — PDF(pdfplumber) + DOCX(python-docx) 文本提取
+- [x] 后端：`EntityExtractor` — 规则驱动 JD/简历实体提取（150+ 技能词表）
+- [x] 后端：`EntityExtractor.match()` — 加权技能匹配（required ×1.5, preferred ×0.5）
+- [x] 后端：`interview.py` 数据模型（ParsedDocument / JDEntities / ResumeEntities / MatchResult 等）
+- [x] 后端：依赖更新 pdfplumber / python-docx / fpdf2(dev)
+- [x] 修复：agent_list 提前到 WebSocket connect 时发送
+
+### 验证标准
+
+- ✅ 57/57 后端测试全绿
+- ✅ PDF + DOCX 解析正确，中文文本提取正常
+- ✅ JD 技能/经验/学历/职责提取准确
+- ✅ 简历姓名/联系方式/技能/经历/学历提取准确
+- ✅ 匹配百分比 + 技能缺口分析正确
+
+---
+
+## PR 13: InterviewAgent 面试前 — 文档上传 + 动态题库生成
+
+### 任务清单
+
+- [x] 后端：`InterviewAgent` — 实现 BaseAgent（agent_id="interview"，面试官 system prompt）
+- [x] 后端：`QuestionGenerator` — AI 驱动的四类题库生成（破冰/技术/STAR/压力）
+- [x] 后端：`QuestionBank` 数据模型 — InterviewQuestion / QuestionCategory / QuestionBank
+- [x] 后端：`ws.py` document_upload 消息处理 + 完整 pipeline（解析→提取→匹配→题库生成）
+- [x] 后端：`agent_list` 扩展 ui_config 字段
+- [x] 后端：`SessionState` 扩展 interview 字段（jd_entities / resume_entities / match_result / question_bank）
+- [x] 后端：`main.py` 注册 InterviewAgent
+- [x] 前端：`DocumentUpload` — 双区拖拽上传（JD + 简历），HTML5 Drag & Drop
+- [x] 前端：`QuestionBank` — 折叠分类题库（难度徽章 + 技能标签）
+- [x] 前端：`useAgent` 扩展 — 暴露 `uiConfig` 用于条件渲染
+- [x] 前端：`App.tsx` 条件渲染 DocumentUpload + QuestionBank
+- [x] 前端：`App.css` 玻璃态样式（upload zones + question cards）
+- [x] 前端：AgentSelector 重构为下拉菜单（玻璃态，对话中禁用锁定）
+- [x] 前端：DocumentUpload 并排布局（flex row，面板左边界对齐视频右边界，不覆盖）
+- [x] 前端：QuestionBank 修复遮挡聊天框（删入场动画，加 flex-shrink:0）
+- [x] 前端：`handleStartConversation` 发送 `reset_conversation` 清空后端历史
+- [x] 后端：`agent_select` 自动清空 `session.history`（Agent 上下文隔离）
+- [x] 后端：`reset_conversation` WS 消息处理（清空 history + interview 状态）
+- [x] 测试：11+11+1=23 新增测试（agent + question generator + reset_conversation）
+
+### 验证标准
+
+- ✅ 80/80 测试全绿
+- ✅ `npx tsc --noEmit` 零错误
+- ✅ InterviewAgent 注册成功，agent_list 含 2 个 agent（chat + interview）
+- ✅ document_upload → document_parsed → question_bank 端到端流程
+- ✅ 题库 AI 解析失败时降级兜底
+- ✅ 前端 Agent 切换时 DocumentUpload/QuestionBank 自动显示/隐藏
+- ✅ Agent 对话隔离：切换 Agent 清空 history，对话中禁止切换
+- ✅ 每次 Start → 新上下文，Stop → AgentSelector 恢复可切换
+- ✅ 面板不覆盖视频（flex row 并排），不遮挡聊天框

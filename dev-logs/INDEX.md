@@ -20,6 +20,7 @@
 | 2026-06-22 | **PR 10 — AI Provider 抽象层 + 阿里云百炼 HTTP 集成 ✅** | [2026-06-22-pr10-ai-provider-abstraction.md](2026-06-22-pr10-ai-provider-abstraction.md) |
 | 2026-06-23 | **PR 11 — Agent 框架 + Agent 选择器 UI ✅** | [2026-06-23-pr11-agent-framework.md](2026-06-23-pr11-agent-framework.md) |
 | 2026-06-23 | **PR 12 — 文档解析 + 实体提取服务 ✅** | [2026-06-23-pr12-document-parser.md](2026-06-23-pr12-document-parser.md) |
+| 2026-06-23 | **PR 13 — InterviewAgent 面试前 + 文档上传 + 题库生成 ✅** | [2026-06-23-pr13-interview-agent-pre.md](2026-06-23-pr13-interview-agent-pre.md) |
 
 ---
 

@@ -88,6 +88,13 @@ export interface AgentInfo {
   agent_id: string;
   name: string;
   description: string;
+  ui_config: AgentUIConfig;
+}
+
+export interface AgentUIConfig {
+  show_document_upload: boolean;
+  show_question_bank: boolean;
+  header_color: string;
 }
 
 export interface AgentListPayload {
@@ -96,6 +103,62 @@ export interface AgentListPayload {
 
 export interface AgentSelectPayload {
   agent_id: string;
+}
+
+// ---- PR 13: Document Upload & Question Bank Payloads ----
+
+export interface DocumentUploadPayload {
+  doc_type: 'jd' | 'resume';
+  filename: string;
+  data: string; // base64-encoded file bytes
+}
+
+export interface DocumentParsedPayload {
+  doc_type: 'jd' | 'resume';
+  filename: string;
+  jd_entities?: Record<string, unknown>;
+  resume_entities?: Record<string, unknown>;
+  match_result?: MatchResultPayload;
+}
+
+export interface MatchResultPayload {
+  match_percentage: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  extra_skills: string[];
+  skill_gaps: SkillGapPayload[];
+  experience_match: boolean;
+  education_match: boolean;
+  summary: string;
+}
+
+export interface SkillGapPayload {
+  skill: string;
+  required: boolean;
+  candidate_has: boolean;
+  importance: string;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  text: string;
+  category: string;
+  difficulty: string;
+  reference: string;
+}
+
+export interface QuestionCategory {
+  name: string;
+  type: string;
+  icon: string;
+  questions: InterviewQuestion[];
+  expanded: boolean;
+}
+
+export interface QuestionBankPayload {
+  categories: QuestionCategory[];
+  total_questions: number;
+  generated_at: string;
 }
 
 // ---- UI State Types ----
