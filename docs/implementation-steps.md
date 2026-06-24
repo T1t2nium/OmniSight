@@ -485,3 +485,28 @@ audio_chunk → AudioBuffer → faster-whisper → BailianHTTP(system_prompt=ins
 - ✅ QuestionBank 下拉菜单不影响布局
 - ✅ 题库问题更贴合简历内容（工作经历入 prompt + 模糊匹配）
 
+---
+
+## BugFix — 关闭摄像头后 AI 残留旧帧
+
+**日期**: 2026-06-24 | **状态**: ✅ 已修复
+
+### 问题
+
+摄像头关闭后 `SessionState.latest_frame` 未清除，AI 基于残留帧仍然描述画面。
+
+### 修复
+
+| 轮次 | 变更 | 文件 |
+|------|------|------|
+| 清帧信号 | 前端 `useFrameCapture` cleanup → 发送空 `video_frame`；后端识别并调用 `clear_latest_frame()` | `useFrameCapture.ts`, `ws.py`, `state.py` |
+| AI 感知 | `process_utterance` 检测无帧时在 AI 输入追加 `[系统提示：摄像头已关闭]` | `conversation.py`, `ws.py` |
+| React 时序 | 清帧信号从 effect body 移至 cleanup 函数（React 先 cleanup 后 body） | `useFrameCapture.ts` |
+| 管道日志 | 全链路 console 日志：📷 帧状态 → 🖼️ 图片传否 → 💬 AI 输入 → 🤖 AI 回复 | `ws.py`, `conversation.py` |
+
+### 验证
+
+- ✅ 136/136 后端测试 + `test_video_frame_clear_clears_latest_frame`
+- ✅ tsc 零错误 + 14/14 vitest
+- ✅ 后端终端可见完整 `📷 CAMERA OFF` → `🚫 NO image` → `💬 AI INPUT (camera OFF)` → `🤖 AI RESPONSE` 链路
+
