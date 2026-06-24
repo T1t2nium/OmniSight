@@ -35,15 +35,6 @@ export function useFrameCapture({
   useEffect(() => {
     if (!stream || !enabled) {
       if (intervalRef.current) {
-        // Send a clear-frame message so the backend drops the
-        // stale frame.  Without this the AI keeps seeing the
-        // last captured image after the camera is turned off.
-        sendMessage({
-          type: 'video_frame',
-          session_id: sessionId,
-          timestamp: Date.now() / 1000,
-          payload: { data: '', width: 0, height: 0 },
-        });
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -101,6 +92,18 @@ export function useFrameCapture({
 
     return () => {
       if (intervalRef.current) {
+        // Send a clear-frame signal before stopping.  This tells the
+        // backend the camera is off so the AI won't use a stale frame.
+        // Must be here (in the cleanup) rather than in the effect body
+        // because React runs cleanup *before* the next effect, and the
+        // next effect's `!enabled` branch would find intervalRef already
+        // nulled.
+        sendMessage({
+          type: 'video_frame',
+          session_id: sessionId,
+          timestamp: Date.now() / 1000,
+          payload: { data: '', width: 0, height: 0 },
+        });
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
