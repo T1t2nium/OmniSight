@@ -24,6 +24,7 @@
 | 2026-06-23 | **PR 14 — InterviewAgent 面试中 — 增强指令 + STAR 追问 ✅** | [2026-06-23-pr14-interview-during.md](2026-06-23-pr14-interview-during.md) |
 | 2026-06-23 ~ 24 | **PR 15 — InterviewAgent 面试后 — 雷达评分 + AI 报告 ✅** | [2026-06-23-pr15-interview-post.md](2026-06-23-pr15-interview-post.md) |
 | 2026-06-24 | **PR 16 — 端到端集成测试 + 文档完善 ✅** | [2026-06-24-pr16-integration.md](2026-06-24-pr16-integration.md) |
+| 2026-06-24 | **BugFix — 关闭摄像头后 AI 残留旧帧 ✅** | [2026-06-24-camera-off-fix.md](2026-06-24-camera-off-fix.md) |
 
 ---
 
