@@ -138,10 +138,20 @@ class ConversationOrchestrator:
             # the AI so it doesn't hallucinate visual descriptions.
             ai_text: str = text
             if vision_enabled and not latest_frame_b64:
-                ai_text = (
-                    f"{text}\n\n"
-                    f"[系统提示：摄像头已关闭，你当前无法看到任何画面。"
-                    f"请勿描述或假装看到视频内容，基于对话历史和知识作答。]"
+                camera_note = (
+                    "[系统提示：摄像头已关闭，你当前无法看到任何画面。"
+                    "请勿描述或假装看到视频内容，基于对话历史和知识作答。]"
+                )
+                ai_text = f"{text}\n\n{camera_note}"
+                logger.info(
+                    "💬 AI INPUT (camera OFF): user_text=%r  appended_note=%r",
+                    text[:120], camera_note,
+                )
+            else:
+                logger.info(
+                    "💬 AI INPUT (image=%s): user_text=%r",
+                    "yes" if latest_frame_b64 else "no",
+                    text[:120],
                 )
 
             # ---- Step 6: Stream LLM + feed TTS queue ----
@@ -234,6 +244,13 @@ class ConversationOrchestrator:
             # ---- Step 8: Store assistant response for next turn ----
             if full_response:
                 history.append({"role": "assistant", "content": full_response})
+                logger.info(
+                    "🤖 AI RESPONSE (%d chars): %s",
+                    len(full_response),
+                    full_response[:300],
+                )
+            else:
+                logger.warning("🤖 AI RESPONSE: empty (no text returned)")
 
         except asyncio.CancelledError:
             logger.info("AI pipeline cancelled (interrupt)")

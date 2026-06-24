@@ -218,6 +218,7 @@ async def _handle_video_frame(
     # sent by the frontend when the camera is turned off.
     if not b64_data and width == 0 and height == 0:
         await state_manager.clear_latest_frame(session_id)
+        logger.info("📷 CAMERA OFF — latest_frame cleared for session %s", session_id)
     elif b64_data:
         settings = get_settings()
         if settings.motion_detection_enabled:
@@ -226,6 +227,11 @@ async def _handle_video_frame(
                 b64_data = ""  # Don't update latest_frame
         if b64_data:
             await state_manager.set_latest_frame(session_id, b64_data)
+            logger.info(
+                "📷 FRAME STORED — session=%s size=%d KB (w=%d h=%d)%s",
+                session_id, len(b64_data) // 1024, width, height,
+                " [motion skip]" if motion_skipped else "",
+            )
 
     frame_count = await state_manager.increment_frames(session_id)
     session_state = await state_manager.get(session_id)
@@ -583,6 +589,16 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
     latest_frame = None
     if settings.vision_enabled:
         latest_frame, _ = await state_manager.get_latest_frame(session_id)
+        if latest_frame:
+            logger.info(
+                "🖼️  PIPELINE: sending image to AI — session=%s size=%d KB",
+                session_id, len(latest_frame) // 1024,
+            )
+        else:
+            logger.info(
+                "🚫 PIPELINE: NO image — camera is off or no frame yet — session=%s",
+                session_id,
+            )
 
     # Get orchestrator from app state
     orchestrator: ConversationOrchestrator = ws.app.state.orchestrator
