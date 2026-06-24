@@ -132,8 +132,8 @@ export default function NeuralBackground({
 
         if (distance < interactionRadius && distance > 0) {
           const force = (interactionRadius - distance) / interactionRadius;
-          this.vx -= (dx / distance) * force * 0.05;
-          this.vy -= (dy / distance) * force * 0.05;
+          this.vx -= (dx / distance) * force * 1.2;
+          this.vy -= (dy / distance) * force * 1.2;
         }
 
         // Apply velocity + friction
@@ -223,9 +223,12 @@ export default function NeuralBackground({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left;
-      mouse.y = e.clientY - rect.top;
+      // Use clientX/Y directly — the NeuralBackground div fills
+      // the entire viewport, so viewport coords equal canvas coords.
+      // We listen on window rather than the canvas because the .app
+      // layer (z-index: 1) sits on top and would intercept events.
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
     };
 
     const handleMouseLeave = () => {
@@ -238,8 +241,8 @@ export default function NeuralBackground({
     animate();
 
     window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseleave", handleMouseLeave);
 
     // Handle reduced-motion preference changes at runtime
     const handleMotionChange = (e: MediaQueryListEvent) => {
@@ -266,8 +269,8 @@ export default function NeuralBackground({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseleave", handleMouseLeave);
       motionQuery.removeEventListener("change", handleMotionChange);
       cancelAnimationFrame(animationFrameId);
     };
