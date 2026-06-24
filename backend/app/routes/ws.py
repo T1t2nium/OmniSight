@@ -622,6 +622,7 @@ async def _start_ai_pipeline(ws: WebSocket, session_id: str) -> None:
             send_fn=send_msg,
             status_fn=send_status,
             system_prompt=system_prompt,
+            vision_enabled=settings.vision_enabled,
         )
     )
     _running_tasks[session_id] = task

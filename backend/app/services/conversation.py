@@ -73,6 +73,7 @@ class ConversationOrchestrator:
         send_fn: Callable[[str, dict], Awaitable[None]],
         status_fn: Callable[[str], Awaitable[None]],
         system_prompt: str | None = None,
+        vision_enabled: bool = True,
     ) -> list[dict]:
         """Run the full AI pipeline on a single user utterance.
 
@@ -132,6 +133,17 @@ class ConversationOrchestrator:
             history = history or []
             history.append({"role": "user", "content": text})
 
+            # ---- Step 5b: Build AI input (may differ from user text) ----
+            # When vision is enabled but the camera is off, explicitly tell
+            # the AI so it doesn't hallucinate visual descriptions.
+            ai_text: str = text
+            if vision_enabled and not latest_frame_b64:
+                ai_text = (
+                    f"{text}\n\n"
+                    f"[系统提示：摄像头已关闭，你当前无法看到任何画面。"
+                    f"请勿描述或假装看到视频内容，基于对话历史和知识作答。]"
+                )
+
             # ---- Step 6: Stream LLM + feed TTS queue ----
             # Producer-consumer: LLM pushes complete sentences into a queue;
             # a single TTS worker consumes them sequentially. This decouples
@@ -174,7 +186,7 @@ class ConversationOrchestrator:
                 for attempt in range(2):
                     try:
                         async for chunk in self._ai_client.chat(
-                            text, image_base64=latest_frame_b64, history=history,
+                            ai_text, image_base64=latest_frame_b64, history=history,
                             system_prompt=system_prompt,
                         ):
                             full_response += chunk["delta"]
