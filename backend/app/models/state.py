@@ -128,6 +128,14 @@ class ConnectionStateManager:
                 return state.latest_frame, state.latest_frame_timestamp
             return None, 0.0
 
+    async def clear_latest_frame(self, session_id: str) -> None:
+        """Reset stored frame to None — used when camera is turned off."""
+        async with self._lock:
+            state = self._sessions.get(session_id)
+            if state:
+                state.latest_frame = None
+                state.latest_frame_timestamp = 0.0
+
     async def set_ai_status(self, session_id: str, status: str) -> None:
         """Update the AI processing status."""
         async with self._lock:

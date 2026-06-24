@@ -6,6 +6,8 @@ Uses Starlette's TestClient (built-in WebSocket support) rather than httpx
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import time
 import uuid
@@ -14,6 +16,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from app.main import app
+from app.routes.ws import state_manager
 
 
 # ---- Helpers ----
@@ -155,6 +158,62 @@ def test_video_frame_echo():
 
         echoes = [m for m in msgs if m["type"] == "echo"]
         assert len(echoes) >= 1
+
+
+def test_video_frame_clear_clears_latest_frame():
+    """Empty video_frame (width=0, height=0) clears the stored latest_frame."""
+    minimal_jpeg = base64.b64decode(
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL"
+        "DBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/"
+        "2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy"
+        "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QA"
+        "HwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUF"
+        "BAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkK"
+        "FhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1"
+        "dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXG"
+        "x8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEB"
+        "AQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAEC"
+        "AxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYI0JT"
+        "Y3KSo0RUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkp"
+        "OUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4u"
+        "Pk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q=="
+    )
+
+    client = TestClient(app)
+    with client.websocket_connect("/ws") as ws:
+        sid = f"test-clr-{uuid.uuid4().hex[:8]}"
+
+        # Send a normal frame first → stored
+        ws.send_json(_make_msg("video_frame", sid, {
+            "data": base64.b64encode(minimal_jpeg).decode("ascii"),
+            "width": 640,
+            "height": 480,
+        }))
+        # Drain: agent_list + server_status + echo
+        for _ in range(3):
+            ws.receive_json()
+
+        # Verify frame is stored
+        frame, _ts = asyncio.run(
+            state_manager.get_latest_frame(sid)
+        )
+        assert frame is not None, "Frame should be stored after normal video_frame"
+
+        # Send clear-frame signal (empty data, width=0, height=0)
+        ws.send_json(_make_msg("video_frame", sid, {
+            "data": "",
+            "width": 0,
+            "height": 0,
+        }))
+        ws.receive_json()  # echo
+
+        # Verify frame is cleared
+        frame2, _ts2 = asyncio.run(
+            state_manager.get_latest_frame(sid)
+        )
+        assert frame2 is None, (
+            "Frame should be None after clear-frame video_frame"
+        )
 
 
 def test_session_isolation():

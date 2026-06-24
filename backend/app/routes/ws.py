@@ -210,9 +210,15 @@ async def _handle_video_frame(
     not stored as latest_frame — they don't trigger a new vision query.
     """
     b64_data = payload.get("data", "")
+    width = payload.get("width", 0)
+    height = payload.get("height", 0)
     motion_skipped = False
 
-    if b64_data:
+    # Empty data (width=0, height=0) is a clear-frame signal
+    # sent by the frontend when the camera is turned off.
+    if not b64_data and width == 0 and height == 0:
+        await state_manager.clear_latest_frame(session_id)
+    elif b64_data:
         settings = get_settings()
         if settings.motion_detection_enabled:
             if not motion_detector.is_significant_change(b64_data):
